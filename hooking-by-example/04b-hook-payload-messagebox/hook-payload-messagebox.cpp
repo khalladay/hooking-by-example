@@ -4,5 +4,6 @@
 HBRUSH showMessage(const LOGBRUSH* plbrush)
 {
 	MessageBox(NULL, "Function Hook", "Woohoo!", 0);
-	return 0;
+	return 0;;
+//	return ((HBRUSH(*)(const LOGBRUSH*))0xDEADBEEF)(plbrush);
 }
