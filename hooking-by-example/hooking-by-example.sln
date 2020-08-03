@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 16
 VisualStudioVersion = 16.0.29102.190
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02a-basic-64bit-inline-hook", "02a-basic-64bit-inline-hook\02a-basic-64bit-inline-hook.vcxproj", "{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02b-basic-64bit-inline-hook-dll", "02b-basic-64bit-inline-hook-dll\02b-basic-64bit-inline-hook-dll.vcxproj", "{9FAE1C52-060A-41DB-BF42-2D46D7DB3F73}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "03a-hook-other-process-targetapp", "03a-hook-other-process-targetapp\03a-hook-other-process-targetapp.vcxproj", "{86FC1914-BA94-4C51-B190-426946C2C48A}"
@@ -24,10 +22,13 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "02c-two-jump-hook", "02c-two-jump-hook\02c-two-jump-hook.vcxproj", "{2D3DB3A6-B713-4443-A17E-028CE93E2941}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Target Programs", "Target Programs", "{6B749FD3-16EE-436E-9DE8-F0E00C71426B}"
+	ProjectSection(SolutionItems) = preProject
+		hooking_common.h = hooking_common.h
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Without Trampolines", "Without Trampolines", "{BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Trampolines", "Trampolines", "{06AA2F4A-8CC1-4EA9-ADC0-D55562B6D558}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "With Trampolines", "With Trampolines", "{06AA2F4A-8CC1-4EA9-ADC0-D55562B6D558}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-free-function-in-same-program-32", "hook-free-function-in-same-program-32\hook-free-function-in-same-program-32.vcxproj", "{33613AC6-08C6-48E1-B187-CC1B3FA0EE38}"
 EndProject
@@ -35,11 +36,28 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-free-function-in-same-
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-member-function-in-same-program", "hook-member-function-in-same-program-64\hook-member-function-in-same-program-64.vcxproj", "{384F0EB7-2732-4FBE-8FE3-F7184B9256EC}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Other Processes", "Hooking Other Processes", "{1E7B3B3C-A6B5-49A9-BE6C-0C4C76F5CBF6}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-virtual-function-in-same-program", "hook-virtual-function-in-same-program\hook-virtual-function-in-same-program.vcxproj", "{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SharedCode", "_SharedCode", "{5AEAB45E-C6A2-401F-805F-EE1333C09185}"
+	ProjectSection(SolutionItems) = preProject
+		hooking_common.h = hooking_common.h
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Functions In Same Program", "Hooking Functions In Same Program", "{CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Functions In Other Processes", "Hooking Functions In Other Processes", "{C8E69C43-BDFA-4C63-8EF8-1540E6776758}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Functions Exported From DLLs", "Hooking Functions Exported From DLLs", "{70087FC6-F54B-4677-A901-F440AA801E81}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "target-with-free-functions", "target-with-free-functions\target-with-free-functions.vcxproj", "{B381F163-1892-49AF-8F29-638277676D40}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-free-function-in-other-process", "hook-free-function-in-other-process\hook-free-function-in-other-process.vcxproj", "{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "target-with-nonvirtual-member-functions", "target-with-nonvirtual-member-functions\target-with-nonvirtual-member-functions.vcxproj", "{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "target-with-virtual-member-functions", "target-with-virtual-member-functions\target-with-virtual-member-functions.vcxproj", "{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-member-function-in-other-process", "hook-member-function-in-other-process\hook-member-function-in-other-process.vcxproj", "{23E22BE4-4824-493A-846A-E97D2C254733}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -49,14 +67,6 @@ Global
 		Release|x86 = Release|x86
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Debug|x64.ActiveCfg = Debug|x64
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Debug|x64.Build.0 = Debug|x64
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Debug|x86.ActiveCfg = Debug|Win32
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Debug|x86.Build.0 = Debug|Win32
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Release|x64.ActiveCfg = Release|x64
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Release|x64.Build.0 = Release|x64
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Release|x86.ActiveCfg = Release|Win32
-		{FDFD99BA-9FF5-4FEE-9351-DFA9DBECBA55}.Release|x86.Build.0 = Release|Win32
 		{9FAE1C52-060A-41DB-BF42-2D46D7DB3F73}.Debug|x64.ActiveCfg = Debug|x64
 		{9FAE1C52-060A-41DB-BF42-2D46D7DB3F73}.Debug|x64.Build.0 = Debug|x64
 		{9FAE1C52-060A-41DB-BF42-2D46D7DB3F73}.Debug|x86.ActiveCfg = Debug|Win32
@@ -161,15 +171,63 @@ Global
 		{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15}.Release|x64.Build.0 = Release|x64
 		{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15}.Release|x86.ActiveCfg = Release|Win32
 		{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15}.Release|x86.Build.0 = Release|Win32
+		{B381F163-1892-49AF-8F29-638277676D40}.Debug|x64.ActiveCfg = Debug|x64
+		{B381F163-1892-49AF-8F29-638277676D40}.Debug|x64.Build.0 = Debug|x64
+		{B381F163-1892-49AF-8F29-638277676D40}.Debug|x86.ActiveCfg = Debug|Win32
+		{B381F163-1892-49AF-8F29-638277676D40}.Debug|x86.Build.0 = Debug|Win32
+		{B381F163-1892-49AF-8F29-638277676D40}.Release|x64.ActiveCfg = Release|x64
+		{B381F163-1892-49AF-8F29-638277676D40}.Release|x64.Build.0 = Release|x64
+		{B381F163-1892-49AF-8F29-638277676D40}.Release|x86.ActiveCfg = Release|Win32
+		{B381F163-1892-49AF-8F29-638277676D40}.Release|x86.Build.0 = Release|Win32
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Debug|x64.ActiveCfg = Debug|x64
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Debug|x64.Build.0 = Debug|x64
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Debug|x86.ActiveCfg = Debug|Win32
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Debug|x86.Build.0 = Debug|Win32
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Release|x64.ActiveCfg = Release|x64
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Release|x64.Build.0 = Release|x64
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Release|x86.ActiveCfg = Release|Win32
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5}.Release|x86.Build.0 = Release|Win32
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Debug|x64.ActiveCfg = Debug|x64
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Debug|x64.Build.0 = Debug|x64
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Debug|x86.ActiveCfg = Debug|Win32
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Debug|x86.Build.0 = Debug|Win32
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Release|x64.ActiveCfg = Release|x64
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Release|x64.Build.0 = Release|x64
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Release|x86.ActiveCfg = Release|Win32
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB}.Release|x86.Build.0 = Release|Win32
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Debug|x64.ActiveCfg = Debug|x64
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Debug|x64.Build.0 = Debug|x64
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Debug|x86.ActiveCfg = Debug|Win32
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Debug|x86.Build.0 = Debug|Win32
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Release|x64.ActiveCfg = Release|x64
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Release|x64.Build.0 = Release|x64
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Release|x86.ActiveCfg = Release|Win32
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285}.Release|x86.Build.0 = Release|Win32
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Debug|x64.ActiveCfg = Debug|x64
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Debug|x64.Build.0 = Debug|x64
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Debug|x86.ActiveCfg = Debug|Win32
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Debug|x86.Build.0 = Debug|Win32
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Release|x64.ActiveCfg = Release|x64
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Release|x64.Build.0 = Release|x64
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Release|x86.ActiveCfg = Release|Win32
+		{23E22BE4-4824-493A-846A-E97D2C254733}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
-		{33613AC6-08C6-48E1-B187-CC1B3FA0EE38} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
-		{B5A5A457-3512-4F70-B2EF-CD1423EA8E47} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
-		{384F0EB7-2732-4FBE-8FE3-F7184B9256EC} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
-		{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
+		{33613AC6-08C6-48E1-B187-CC1B3FA0EE38} = {CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}
+		{B5A5A457-3512-4F70-B2EF-CD1423EA8E47} = {CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}
+		{384F0EB7-2732-4FBE-8FE3-F7184B9256EC} = {CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}
+		{5F40CE1F-A093-4F58-AFA2-1AC190DF0D15} = {CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}
+		{CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
+		{C8E69C43-BDFA-4C63-8EF8-1540E6776758} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
+		{70087FC6-F54B-4677-A901-F440AA801E81} = {BEE66BBD-CF19-488A-AF5D-2C303C6F1DD4}
+		{B381F163-1892-49AF-8F29-638277676D40} = {6B749FD3-16EE-436E-9DE8-F0E00C71426B}
+		{E8270468-62AB-4C5C-A4A5-E882C4C21FE5} = {C8E69C43-BDFA-4C63-8EF8-1540E6776758}
+		{EEBED021-72EB-4AF9-8F00-EAF1AF9675BB} = {6B749FD3-16EE-436E-9DE8-F0E00C71426B}
+		{E73F59E5-A0D4-48F2-B3B4-AE820CD92285} = {6B749FD3-16EE-436E-9DE8-F0E00C71426B}
+		{23E22BE4-4824-493A-846A-E97D2C254733} = {C8E69C43-BDFA-4C63-8EF8-1540E6776758}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {20C0AF83-C1EC-4FAF-85B1-54BFA2106DC3}

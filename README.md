@@ -1,7 +1,9 @@
 # Hooking By Example
-A collection of example projects which demonstrate hooking techniques.
+A collection of example projects which demonstrate various hooking techniques.
 
-The code for each vs project in the solution is entirely self contained. At runtime, some projects may rely on other projects being built, or running at the same time. 
+The code for each vs project in the solution is entirely self contained. This means that there is a lot of code duplication between projects, but it also saves having to jump back and forth between different source files when trying to understand an example. 
+
+At runtime, some projects may rely on other projects being built (injecting a dll requires that dll has been built), or running at the same time (hooking a target program requires it be already running).  
 
 # Building
 All examples were built using Visual Studio 2019 (v142) with Windows SDK 10.0.17763.0. 

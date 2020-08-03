@@ -15,7 +15,7 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <ClCompile Include="basic-64bit-inline-hook.cpp">
+    <ClCompile Include="target-with-free-functions.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
