@@ -11,7 +11,7 @@
 
 __declspec(noinline) int getNum()
 {
-	return 55;
+	return 0;
 }
 
 int main()

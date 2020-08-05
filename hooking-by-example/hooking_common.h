@@ -1,19 +1,36 @@
-//all the programs in this project are self contained (and don't include this header)
-//this file is here simply as a convenient way to grab functions used by the examples
-//for use in other programs.
-
-#include <memoryapi.h>
 #include <Windows.h>
+#include <memoryapi.h>
 #include <wow64apiset.h> // for checking is process is 64 bit
 #include <TlHelp32.h> //for PROCESSENTRY32, needs to be included after windows.h
+#include <Psapi.h>
+#include <stdint.h>
+#include <stdio.h>
 
-#define check(expr) if (!(expr)){ DebugBreak(); exit(-1); }
+#define check(expr) if (!(expr)){ printf("Error: %i\n", GetLastError()); DebugBreak(); exit(-1); }
 
 #if _WIN64
 typedef uint64_t addr_t;
 #else 
 typedef uint32_t addr_t;
 #endif
+
+bool IsProcess64Bit(HANDLE process)
+{
+	BOOL isWow64 = false;
+	IsWow64Process(process, &isWow64);
+
+	if (isWow64)
+	{
+		//process is 32 bit, running on 64 bit machine
+		return false;
+	}
+	else
+	{
+		SYSTEM_INFO sysInfo;
+		GetSystemInfo(&sysInfo);
+		return sysInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64;
+	}
+}
 
 void* AllocPageInTargetProcess(HANDLE process)
 {
@@ -136,24 +153,6 @@ void* AllocatePageNearAddress(void* targetAddr)
 	}
 
 	return nullptr;
-}
-
-bool IsProcess64Bit(HANDLE process)
-{
-	bool isWow64 = false;
-	IsWow64Process(process, &isWow64);
-
-	if (isWow64)
-	{
-		//process is 32 bit, running on 64 bit machine
-		return false;
-	}
-	else
-	{
-		SYSTEM_INFO sysInfo;
-		GetSystemInfo(&sysInfo);
-		return sysInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64;
-	}
 }
 
 void LowercaseInPlace(char* str)
