@@ -6,13 +6,44 @@
 #include <stdint.h>
 #include <stdio.h>
 
-#define check(expr) if (!(expr)){ printf("Error: %i\n", GetLastError()); DebugBreak(); exit(-1); }
+#define check(expr) if (!(expr)){PrintErrorMessageToConsole(GetLastError()); DebugBreak(); exit(-1); }
 
 #if _WIN64
 typedef uint64_t addr_t;
 #else 
 typedef uint32_t addr_t;
 #endif
+
+void PrintErrorMessageToConsole(DWORD errorCode)
+{
+	char errorBuf[1024];
+	FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,
+		errorCode,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		errorBuf,
+		1024,
+		NULL);
+
+	printf("Error: %i : %s\n", errorCode, errorBuf);
+}
+
+BOOL GetErrorMessage(DWORD dwErrorCode, LPTSTR pBuffer, DWORD cchBufferLength)
+{
+	if (cchBufferLength == 0)
+	{
+		return FALSE;
+	}
+
+	DWORD cchMsg = FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_IGNORE_INSERTS,
+		NULL,  /* (not used with FORMAT_MESSAGE_FROM_SYSTEM) */
+		dwErrorCode,
+		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+		pBuffer,
+		cchBufferLength,
+		NULL);
+	return (cchMsg > 0);
+}
 
 bool IsProcess64Bit(HANDLE process)
 {
@@ -86,14 +117,14 @@ void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
 
 		if (highAddr < maxAddr)
 		{
-			void* outAddr = VirtualAllocEx(handle, (void*)highAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+			void* outAddr = VirtualAllocEx(handle, (void*)highAddr, (size_t)PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 			if (outAddr)
 				return outAddr;
 		}
 
 		if (lowAddr > minAddr)
 		{
-			void* outAddr = VirtualAllocEx(handle, (void*)lowAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+			void* outAddr = VirtualAllocEx(handle, (void*)lowAddr, (size_t)PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
 			if (outAddr != nullptr)
 				return outAddr;
 		}
@@ -186,11 +217,12 @@ HMODULE GetBaseModuleForProcess(HANDLE process)
 	for (DWORD i = 0; i < numRemoteModules; ++i)
 	{
 		CHAR moduleName[256];
+		CHAR absoluteModuleName[256];
 
 		GetModuleFileNameEx(process, remoteProcessModules[i], moduleName, 256);
 		LowercaseInPlace(moduleName);
-
-		if (strcmp(remoteProcessName, moduleName) == 0)
+		_fullpath(absoluteModuleName, moduleName, 256);
+		if (strcmp(remoteProcessName, absoluteModuleName) == 0)
 		{
 			remoteProcessModule = remoteProcessModules[i];
 
@@ -231,4 +263,90 @@ DWORD FindPidByName(const char* name)
 	CloseHandle(h);
 
 	return 0;
+}
+
+void WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
+{
+	check(IsProcess64Bit(process));
+
+	//this writes the absolute jump instructions into the memory allocated near the target
+	//the E9 jump installed in the target function (GetNum) will jump to here
+	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
+											0xFF, 0xE0 }; //jmp rax
+
+	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
+	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
+	DWORD oldProtect = 0;
+	bool err = VirtualProtectEx(process, absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
+	check(err);
+
+	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
+}
+
+void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
+{
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+
+	int64_t relativeToJumpTarget64 = (int64_t)jumpTarget - ((int64_t)func2hook + 5);
+	check(relativeToJumpTarget64 < INT32_MAX);
+
+	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
+
+	memcpy(jmpInstruction + 1, &relativeToJumpTarget, 4);
+
+	DWORD oldProtect;
+	bool err = VirtualProtectEx(process, func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
+	check(err);
+
+	err = WriteProcessMemory(process, func2hook, jmpInstruction, sizeof(jmpInstruction), nullptr);
+	check(err);
+}
+
+HMODULE FindModuleBaseAddress(HANDLE process, const char* targetModule)
+{
+	HMODULE hMods[1024];
+	DWORD cbNeeded;
+
+	if (EnumProcessModules(process, hMods, sizeof(hMods), &cbNeeded))
+	{
+		for (uint32_t i = 0; i < (cbNeeded / sizeof(HMODULE)); i++)
+		{
+			TCHAR moduleName[MAX_PATH];
+
+			// Get the full path to the module's file.
+
+			if (GetModuleFileNameEx(process, hMods[i], moduleName,
+				sizeof(moduleName) / sizeof(TCHAR)))
+			{
+				// Print the module name and handle value.
+				if (strstr(moduleName, targetModule) != nullptr)
+				{
+					return hMods[i];
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+
+void* FindAddressOfRemoteDLLFunction(HANDLE process, const char* dllName, const char* funcName)
+{
+	//first, load the dll into this process so we can use GetProcAddress to determine the offset
+	//of the target function from the DLL base address
+	HMODULE localDLL = LoadLibraryEx(dllName, NULL, 0);
+	check(localDLL);
+	void* localHookFunc = GetProcAddress(localDLL, funcName);
+	check(localHookFunc);
+
+	uint64_t offsetOfHookFunc = (uint64_t)localHookFunc - (uint64_t)localDLL;
+	FreeLibrary(localDLL); //free the library, we don't need it anymore.
+
+	//Technically, we could just use the result of GetProcAddress, since in 99% of cases, the base address of the dll
+	//in the two processes will be shared thanks to ASLR, but just in case the remote process has relocated the dll, 
+	//I'm getting it here separately.
+
+	HMODULE remoteModuleBase = FindModuleBaseAddress(process, dllName);
+
+	return (void*)((uint64_t)remoteModuleBase + offsetOfHookFunc);
 }

@@ -26,7 +26,7 @@ private:
 
 int main()
 {
-	Num n(0);
+	Num n(1);
 	while (1)
 	{
 		printf("%i\n", n.getNum());

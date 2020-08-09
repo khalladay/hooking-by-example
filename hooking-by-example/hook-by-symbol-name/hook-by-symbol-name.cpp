@@ -1,10 +1,22 @@
+/*	Hook-By-Symbol-Name
+	
+	This program shows how to install a hook in a running process
+	that has been built with debug symbols enabled. The hook that
+	gets installed is "destructive" in the sense that it doesn't use
+	a trampoline, so the original version of the hooked function is 
+	completely destroyed. 
+
+	In this case, that doesn't matter, because the original function
+	just returns a constant (0), and the hook payload that gets installed
+	replaces that with a diffferent constant (100). The payload in this 
+	example program is so simple that it can almost entirely ignore calling
+	conventions, since it doesn't use function args, and only pollutes raxs
+*/
+
 #include "..\hooking_common.h"
 
 #include <DbgHelp.h>
 #pragma comment (lib, "Dbghelp.lib")
-
-void WriteAbsoluteJump(HANDLE process, void* absJumpMemory, void* addrToJumpTo);
-void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget);
 
 const uint8_t hookPayload[] =
 {
@@ -23,7 +35,7 @@ int main(int argc, const char** argv)
 	check(remoteProcessHandle);
 
 	//this process' pointer size needs to match the target process
-	check(IsProcess64Bit(remoteProcessHandle) == (sizeof(addr_t) == 8));
+	check(IsProcess64Bit(remoteProcessHandle) == IsProcess64Bit(GetCurrentProcess));
 
 	//the target program that this program hooks (target-with-free-functions.exe)
 	//has been built with debug symbols enabled, which means we can get the address
@@ -54,7 +66,7 @@ int main(int argc, const char** argv)
 	{
 		void* absoluteJumpMemory = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
 		check(absoluteJumpMemory != nullptr);
-		WriteAbsoluteJump(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
+		WriteAbsoluteJump64(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
 		hookJumpTarget = absoluteJumpMemory;
 	}
 
@@ -63,41 +75,4 @@ int main(int argc, const char** argv)
 	//absolute jump that we made above, which jumps to the payload
 	WriteRelativeJump(remoteProcessHandle, func2hook, hookJumpTarget);
 	return 0;
-}
-
-void WriteAbsoluteJump(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
-{
-	check(IsProcess64Bit(process));
-
-	//this writes the absolute jump instructions into the memory allocated near the target
-	//the E9 jump installed in the target function (GetNum) will jump to here
-	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
-											0xFF, 0xE0 }; //jmp rax
-
-	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
-	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
-	DWORD oldProtect = 0;
-	bool err = VirtualProtectEx(process, absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
-
-	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
-}
-
-void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
-{
-	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
-
-	int64_t relativeToJumpTarget64 = (int64_t)jumpTarget - ((int64_t)func2hook + 5);
-	check(relativeToJumpTarget64 < INT32_MAX);
-
-	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
-
-	memcpy(jmpInstruction + 1, &relativeToJumpTarget, 4);
-
-	DWORD oldProtect;
-	bool err = VirtualProtectEx(process, func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
-
-	err = WriteProcessMemory(process, func2hook, jmpInstruction, sizeof(jmpInstruction), nullptr);
-	check(err);
 }

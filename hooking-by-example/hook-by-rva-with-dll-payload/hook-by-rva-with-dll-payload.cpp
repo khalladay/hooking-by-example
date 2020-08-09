@@ -1,53 +1,99 @@
-//this file demonstrates hooking a function in another process 
-//using an injected dll for the payload, rather than writing the payload
-//to the target process' address space with WriteProcessBytes
+/*	Hooking-By-RVA-With-DLL-Payload
+
+	This program shows how to install a hook in a running process
+	that has been built without debug symbols. The hook that
+	gets installed is "destructive" in the sense that it doesn't use
+	a trampoline, so the original version of the hooked function is
+	completely destroyed.
+
+	In this example, the "payload" (or: where our hook redirects program
+	flow to) is a function in a dll that is injected into the victim
+	process. 
+
+*/
 #include "..\hooking_common.h"
+#include <stdlib.h>
 
-void WriteAbsoluteJump(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
+#define TARGET_APP_NAME "target-with-virtual-member-functions.exe"
+#define PAYLOAD_DLL_NAME "payload-dll.dll"
+#define PAYLOAD_FUNC_NAME "getNum"
+
+void InjectPayload(HANDLE process, const char* pathToPayloadDLL)
 {
-	check(IsProcess64Bit(process));
+	//write the name of our dll to the target process' memory
+	size_t dllPathLen = strlen(pathToPayloadDLL);
+	void* dllPathRemote = VirtualAllocEx(
+		process,
+		NULL, //let the system decide where to allocate the memory
+		dllPathLen,
+		MEM_COMMIT, //actually commit the virtual memory
+		PAGE_READWRITE); //mem access for committed page
 
-	//this writes the absolute jump instructions into the memory allocated near the target
-	//the E9 jump installed in the target function (GetNum) will jump to here
-	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
-											0xFF, 0xE0 }; //jmp rax
+	check(dllPathRemote);
 
-	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
-	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
-	DWORD oldProtect = 0;
-	bool err = VirtualProtectEx(process, absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
+	BOOL writeSucceeded = WriteProcessMemory(
+		process,
+		dllPathRemote,
+		pathToPayloadDLL,
+		dllPathLen,
+		NULL);
 
-	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
+	check(writeSucceeded);
+
+	PTHREAD_START_ROUTINE loadLibraryFunc = (PTHREAD_START_ROUTINE)GetProcAddress(GetModuleHandle(TEXT("Kernel32.dll")), "LoadLibraryA");
+	check(loadLibraryFunc);
+
+	//create a thread in remote process that loads our target dll using LoadLibraryA
+	HANDLE remoteThread = CreateRemoteThread(
+		process,
+		NULL, //default thread security
+		0, //stack size for thread
+		loadLibraryFunc, //pointer to start of thread function (for us, LoadLibraryA)
+		dllPathRemote, //pointer to variable being passed to thread function
+		0, //0 means the thread runs immediately after creation
+		NULL); //we don't care about getting back the thread identifier
+
+	check(remoteThread);
+
+	// Wait for the remote thread to terminate
+	WaitForSingleObject(remoteThread, INFINITE);
+
+	//once we're done, free the memory we allocated in the remote process for the dllPathname, and shut down
+	VirtualFreeEx(process, dllPathRemote, 0, MEM_RELEASE);
+	CloseHandle(remoteThread);
 }
 
-void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
+//hacky way to get the path to the correct payload for
+//whatever the active build config is... saves having to 
+//provide the path on the command line, but is otherwise
+//not particularly important
+void GetPathToPayloadDLL(char* outBuff)
 {
-	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+	char relPath[1024];
+	char thisAppName[1024];
+	GetModuleFileName(NULL, relPath, 1024);
+	GetModuleBaseName(GetCurrentProcess(), NULL, thisAppName, 1024);
+	char* replaceStart = strstr(relPath, thisAppName);
+	const char* payloadDLLName = PAYLOAD_DLL_NAME;
+	memcpy(replaceStart, payloadDLLName, strlen(payloadDLLName));
+	memset(replaceStart + strlen(payloadDLLName), '\0', &relPath[1024] - (replaceStart + strlen(payloadDLLName)));
 
-	int64_t relativeToJumpTarget64 = (int64_t)jumpTarget - ((int64_t)func2hook + 5);
-	check(relativeToJumpTarget64 < INT32_MAX);
-
-	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
-
-	memcpy(jmpInstruction + 1, &relativeToJumpTarget, 4);
-
-	DWORD oldProtect;
-	bool err = VirtualProtectEx(process, func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
-
-	err = WriteProcessMemory(process, func2hook, jmpInstruction, sizeof(jmpInstruction), nullptr);
-	check(err);
+	_fullpath(outBuff, relPath, 1024);
 }
 
 int main(int argc, const char** argv)
 {
 	check(argc == 2);
 
-	DWORD processID = FindPidByName("target-with-nonvirtual-member-functions.exe");
+	//the process we're hooking does NOT have debug symbols, so instead of looking
+	//up the function we want to hook by symbol name, we need to find the relative
+	//virtual address (RVA) of that function in something like x64dbg, and pass it to
+	//this program
+	uint64_t inputRVA = _strtoui64(argv[1], nullptr, 16);
+
+	DWORD processID = FindPidByName(TARGET_APP_NAME);
 	check(processID);
 
-	uint64_t inputRVA = _strtoui64(argv[1], nullptr, 16);
 	HANDLE remoteProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processID);
 	check(remoteProcessHandle);
 
@@ -55,34 +101,34 @@ int main(int argc, const char** argv)
 	check(base);
 	void* func2hook = (void*)((addr_t)base + (addr_t)inputRVA);
 
+	//
+	char fullPath[1024];
+	GetPathToPayloadDLL(fullPath);
+	HMODULE mod = FindModuleBaseAddress(remoteProcessHandle, fullPath);
 
-	//	TODO: have the hook payload return the member var with an addition (no rules when you write your own assembly! )
+	InjectPayload(remoteProcessHandle, fullPath);
 
-		//next step is to write the payload function to the
-		//target process' memory
-	void* payloadAddrInRemoteProcess = AllocPageInTargetProcess(remoteProcessHandle);
+	void* payloadAddrInRemoteProcess = FindAddressOfRemoteDLLFunction(remoteProcessHandle, fullPath, PAYLOAD_FUNC_NAME);
 	check(payloadAddrInRemoteProcess);
-
-	uint8_t hookPayloadFuncBytes[] =
-	{
-		0xB8, 0x64, 0x0, 0x0, 0x0, // mov eax, 64h
-		0xC3					   // ret
-	};
-
-	bool err = WriteProcessMemory(remoteProcessHandle, payloadAddrInRemoteProcess, hookPayloadFuncBytes, sizeof(hookPayloadFuncBytes), nullptr);
-	check(err);
 
 	void* hookJumpTarget = payloadAddrInRemoteProcess;
 
+	//it's possible for functions to be located farther than a 32 bit jump away from one
+	//another in a 64 bit program, (but there's no 64 bit relative jump instruction), so
+	//if the victim process is 64 bit, we need to write an absolute jump instruction somewhere
+	//close to func2hook. The E9 jump that gets installed in func2hook will jump to these
+	//instructions, which will then do a 64 bit absolute jump to the payload.
 	if (IsProcess64Bit(remoteProcessHandle))
 	{
 		void* absoluteJumpMemory = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
 		check(absoluteJumpMemory != nullptr);
-		WriteAbsoluteJump(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
+		WriteAbsoluteJump64(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
 		hookJumpTarget = absoluteJumpMemory;
 	}
 
+	//finally, write the actual "hook" into the target function. On 32 bit
+	//this will jump directly to the payload, on 64 bit, it jumps to the 
+	//absolute jump that we made above, which jumps to the payload
 	WriteRelativeJump(remoteProcessHandle, func2hook, hookJumpTarget);
 	return 0;
-
 }
