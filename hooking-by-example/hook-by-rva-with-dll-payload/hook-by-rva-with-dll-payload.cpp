@@ -101,7 +101,6 @@ int main(int argc, const char** argv)
 	check(base);
 	void* func2hook = (void*)((addr_t)base + (addr_t)inputRVA);
 
-	//
 	char fullPath[1024];
 	GetPathToPayloadDLL(fullPath);
 	HMODULE mod = FindModuleBaseAddress(remoteProcessHandle, fullPath);

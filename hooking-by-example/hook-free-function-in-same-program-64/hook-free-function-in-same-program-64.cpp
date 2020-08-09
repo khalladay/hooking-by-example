@@ -7,10 +7,7 @@
 #include <memoryapi.h>
 #include <stdint.h>
 
-//this example will crash if built as a 32 bit program. It's totally possible
-//to make it work in both 32/64 bits, but in the interest of simplicity, I'm not going to.
-static_assert(sizeof(void*) == 8, "This must be built as a 64 bit program");
-
+#if _WIN64
 #define check(expr) if (!(expr)){ DebugBreak(); exit(-1); }
 
 //the target and palyoad functions in this example are so small/trivial that
@@ -102,11 +99,11 @@ int main()
 	//finally, we install the E9 jump into GetNum
 
 	//32 bit relative jump opcode is E9, takes 1 32 bit operand for jump offset
-	char jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
 	//to fill out the last 4 bytes of jmpInstruction, we need the offset between 
 	//the payload function and the instruction immediately AFTER the jmp instruction
-	const int relAddr = (int)absoluteJumpMemory - ((int)getNum + sizeof(jmpInstruction));
+	const uint64_t relAddr = (uint64_t)absoluteJumpMemory - ((uint64_t)getNum + sizeof(jmpInstruction));
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 	memcpy(getNum, jmpInstruction, sizeof(jmpInstruction));
 
@@ -114,3 +111,10 @@ int main()
 
 	return 0;
 }
+#else
+int main()
+{
+	printf("Example is only valid when compiled as 64 bit\n");
+	return 0;
+}
+#endif

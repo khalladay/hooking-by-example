@@ -113,11 +113,11 @@ int main()
 	if (!jumpTarget) jumpTarget = hookPayload;
 
 	//32 bit relative jump opcode is E9, takes 1 32 bit operand for jump offset
-	char jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
 	//to fill out the last 4 bytes of jmpInstruction, we need the offset between 
 	//the payload function and the instruction immediately AFTER the jmp instruction
-	const int relAddr = (addr_t)jumpTarget- ((addr_t)memberAddr + sizeof(jmpInstruction));
+	const addr_t relAddr = (addr_t)jumpTarget- ((addr_t)memberAddr + sizeof(jmpInstruction));
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 	memcpy(memberAddr, jmpInstruction, sizeof(jmpInstruction));
 

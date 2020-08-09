@@ -1,4 +1,6 @@
+#include "getnum-dll.h"
+
 int getNum()
 {
-	return 0;
+	return 1;
 }

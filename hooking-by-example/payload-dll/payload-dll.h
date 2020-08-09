@@ -3,5 +3,5 @@
 
 extern "C"
 {
-	DllExport int getNum(void* thisPtr);
+	DllExport int __fastcall getNum(void* thisPtr);
 }

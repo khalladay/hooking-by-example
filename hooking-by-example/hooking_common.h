@@ -194,6 +194,37 @@ void LowercaseInPlace(char* str)
 	}
 }
 
+//I use subst to alias my development folder to W: 
+//this will rebase any virtual drives made by subst to
+//their actual drive equivalent, to prevent conflicts. Likely
+//not important for most people and can be ignored
+void RebaseVirtualDrivePath(const char* path, char* outBuff, size_t outBuffSize)
+{
+	memset(outBuff, 0, outBuffSize);
+
+	char driveLetter[3] = { 0 };
+	memcpy(driveLetter, path, 2);
+
+	char deviceDrive[512];
+	QueryDosDevice(driveLetter, deviceDrive, 512);
+
+	const char* virtualDrivePrefix = "\\??\\"; 
+	char* prefix = strstr(deviceDrive, virtualDrivePrefix);
+	if (prefix)
+	{
+		size_t replacementLen = strlen(deviceDrive) - strlen(virtualDrivePrefix);
+		size_t rebasedPathLen = replacementLen + strlen(path) - 2;
+		check(rebasedPathLen < outBuffSize);
+		memcpy(outBuff, deviceDrive + strlen(virtualDrivePrefix), replacementLen);
+		memcpy(outBuff + replacementLen, &path[2], strlen(path) - 2);
+	}
+	else
+	{
+		check(strlen(path) < outBuffSize);
+		memcpy(outBuff, path, strlen(path));
+	}
+}
+
 HMODULE GetBaseModuleForProcess(HANDLE process)
 {
 	HMODULE remoteProcessModules[1024];
@@ -218,11 +249,19 @@ HMODULE GetBaseModuleForProcess(HANDLE process)
 	{
 		CHAR moduleName[256];
 		CHAR absoluteModuleName[256];
-
+		CHAR rebasedPath[256] = { 0 };
 		GetModuleFileNameEx(process, remoteProcessModules[i], moduleName, 256);
-		LowercaseInPlace(moduleName);
-		_fullpath(absoluteModuleName, moduleName, 256);
-		if (strcmp(remoteProcessName, absoluteModuleName) == 0)
+
+		//the following string operations are to account for cases where GetModuleFileNameEx
+		//returns a relative path rather than an absolute one, the path we get to the module
+		//is using a virtual drive letter (ie: one created by subst) rather than a real drive
+		char* err = _fullpath(absoluteModuleName, moduleName, 256);
+		check(err);
+
+		RebaseVirtualDrivePath(absoluteModuleName, rebasedPath, 256);
+		LowercaseInPlace(rebasedPath);
+
+		if (strcmp(remoteProcessName, rebasedPath) == 0)
 		{
 			remoteProcessModule = remoteProcessModules[i];
 

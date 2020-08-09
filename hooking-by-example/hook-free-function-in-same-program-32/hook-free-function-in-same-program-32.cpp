@@ -8,8 +8,9 @@
 #include <stdio.h>
 #include <Windows.h>
 #include <memoryapi.h>
+#include <stdint.h>
 
-static_assert(sizeof(void*) == 4, "This example is only valid in 32 bit");
+#if !defined(_WIN64)
 
 #define check(expr) if (!(expr)){ DebugBreak(); exit(-1); }
 
@@ -36,11 +37,11 @@ int main()
 	check(success);
 
 	//32 bit relative jump opcode is E9, takes 1 32 bit operand for jump offset
-	char jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
 	//to fill out the last 4 bytes of jmpInstruction, we need the offset between 
 	//the payload function and the instruction immediately AFTER the jmp instruction
-	const int relAddr = (int)hookPayload - ((int)getNum + sizeof(jmpInstruction));
+	const uint32_t relAddr = (uint32_t)hookPayload - ((uint32_t)getNum + sizeof(jmpInstruction));
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 	memcpy(getNum, jmpInstruction, sizeof(jmpInstruction));
 
@@ -48,3 +49,7 @@ int main()
 
 	return 0;
 }
+
+#else
+int main() { printf("This program is only valid when compiled as a 32 bit executable\n"); return -1; }
+#endif
