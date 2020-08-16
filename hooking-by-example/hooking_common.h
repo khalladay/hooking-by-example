@@ -304,6 +304,24 @@ DWORD FindPidByName(const char* name)
 	return 0;
 }
 
+void WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
+{
+	check(IsProcess64Bit(GetCurrentProcess()));
+
+	//this writes the absolute jump instructions into the memory allocated near the target
+	//the E9 jump installed in the target function (GetNum) will jump to here
+	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
+											0xFF, 0xE0 }; //jmp rax
+
+	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
+	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
+	DWORD oldProtect = 0;
+	bool err = VirtualProtect(absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
+	check(err);
+
+	memcpy(absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
+}
+
 void WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
 {
 	check(IsProcess64Bit(process));
@@ -320,6 +338,25 @@ void WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo
 	check(err);
 
 	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
+}
+
+void WriteRelativeJump(void* func2hook, void* jumpTarget)
+{
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+
+	int64_t relativeToJumpTarget64 = (int64_t)jumpTarget - ((int64_t)func2hook + 5);
+	check(relativeToJumpTarget64 < INT32_MAX);
+
+	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
+
+	memcpy(jmpInstruction + 1, &relativeToJumpTarget, 4);
+
+	DWORD oldProtect;
+	bool err = VirtualProtect(func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
+	check(err);
+
+	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
+
 }
 
 void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
