@@ -67,29 +67,21 @@ void* AllocPageInTargetProcess(HANDLE process)
 {
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
-
-	addr_t startAddr = (addr_t)sysInfo.lpMinimumApplicationAddress;
 	int PAGE_SIZE = sysInfo.dwPageSize;
-	addr_t startPage = (startAddr - (startAddr % PAGE_SIZE));
-	addr_t pageIndex = 0;
 
-	while (1)
-	{
-		addr_t nextAddr = pageIndex++ * PAGE_SIZE;
+	void* newPage = VirtualAllocEx(process, NULL, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	return newPage;
+}
 
-		if (nextAddr >= (addr_t)sysInfo.lpMaximumApplicationAddress)
-		{
-			break;
-		}
 
-		void* newPage = VirtualAllocEx(process, (void*)nextAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-		if (newPage)
-		{
-			return newPage;
-		}
-	}
+void* AllocPage()
+{
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+	int PAGE_SIZE = sysInfo.dwPageSize;
 
-	return nullptr;
+	void* newPage = VirtualAlloc(NULL, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	return newPage;
 }
 
 void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
@@ -358,6 +350,31 @@ void WriteRelativeJump(void* func2hook, void* jumpTarget)
 	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
 
 }
+
+void WriteRelativeJump(void* func2hook, void* jumpTarget, uint8_t numTrailingNOPs)
+{
+	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
+
+	int64_t relativeToJumpTarget64 = (int64_t)jumpTarget - ((int64_t)func2hook + 5);
+	check(relativeToJumpTarget64 < INT32_MAX);
+
+	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
+
+	memcpy(jmpInstruction + 1, &relativeToJumpTarget, 4);
+
+	DWORD oldProtect;
+	bool err = VirtualProtect(func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
+	check(err);
+
+	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
+
+	uint8_t* byteFunc2Hook = (uint8_t*)func2hook;
+	for (int i = 0; i < numTrailingNOPs; ++i)
+	{
+		memset((void*)(byteFunc2Hook + 5 + i), 0x90, 1);
+	}
+}
+
 
 void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
 {

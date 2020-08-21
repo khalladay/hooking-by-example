@@ -20,6 +20,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SharedCode", "_SharedCode", "{5AEAB45E-C6A2-401F-805F-EE1333C09185}"
 	ProjectSection(SolutionItems) = preProject
 		hooking_common.h = hooking_common.h
+		trampoline_common.h = trampoline_common.h
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Functions In Same Process", "Hooking Functions In Same Process", "{CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}"
