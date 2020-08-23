@@ -19,6 +19,7 @@ Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "hook-virtual-function-in-sa
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SharedCode", "_SharedCode", "{5AEAB45E-C6A2-401F-805F-EE1333C09185}"
 	ProjectSection(SolutionItems) = preProject
+		hooking_asm.asm = hooking_asm.asm
 		hooking_common.h = hooking_common.h
 		trampoline_common.h = trampoline_common.h
 	EndProjectSection
