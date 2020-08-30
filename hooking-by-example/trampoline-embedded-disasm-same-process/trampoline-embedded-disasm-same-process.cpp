@@ -35,10 +35,10 @@ struct HookDesc
 
 extern "C" void call_hook_payload();
 
+
+
 void InstallHook(HookDesc* hook)
 {
-	 
-	call_hook_payload();
 	DWORD oldProtect;
 	bool err = VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
 	check(err);
@@ -70,21 +70,26 @@ void InstallHook(HookDesc* hook)
 		memcpy(stolenByteIter, hook->stolenInstructions[i].bytes, hook->stolenInstructions[i].size);
 		stolenByteIter += hook->stolenInstructions[i].size;
 	}
-	
+
+	uint8_t callAsmBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
+								0xFF, 0xD0, //call rax
+							};
+
+	memcpy(&callAsmBytes[2], &hook->payloadFunc, sizeof(uint64_t));
 	//write trampoline func
 	uint64_t addrOfCallHookPayload = (uint64_t)call_hook_payload;
 	err = VirtualProtect(call_hook_payload, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
 	check(err);
+	uint8_t* payloadPtr = (uint8_t*)call_hook_payload;
+	memcpy(&payloadPtr[33], &callAsmBytes, sizeof(callAsmBytes));
 
-	uint8_t callAsmBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
-								0xFF, 0xD0, //call rax
-							 };
 	memcpy(&callAsmBytes[2], &addrOfCallHookPayload, sizeof(uint64_t));
 
 	uint8_t jmpBytes[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs into rax
 							0xFF, 0xE0 }; //jmp rax
 
-	memcpy(&jmpBytes[2], hook->originalFunc, sizeof(void*));
+	uint64_t orignFuncPostJmp = uint64_t(hook->originalFunc) + 5;
+	memcpy(&jmpBytes[2], &orignFuncPostJmp, sizeof(void*));
 
 	uint8_t* trampolineBytePtr = (uint8_t*)hook->trampolineMem;
 
@@ -104,34 +109,17 @@ void InstallHook(HookDesc* hook)
 
 int main(int argc, const char** argv)
 {	
+	float y = atof(argv[0]);
+	TargetFunc(argc, (float)argc);
 	HookDesc hook = { 0 };
 	hook.originalFunc = TargetFunc;
 	hook.payloadFunc = HookPayload;
 	hook.longJumpMem = AllocatePageNearAddress(TargetFunc);
-	hook.trampolineMem = AllocatePageNearAddress(TargetFunc);// AllocPage();
+	hook.trampolineMem = AllocPage();
 
 	InstallHook(&hook);
 
-	float y = atof(argv[0]);
-	TargetFunc(argc, (float)argc);
+	TargetFunc(argc-1, (float)argc);
 
-	//build trampoline data structure
-
-		/* trampoline layout
-
-	push args onto stack
-	alloc shadow space
-	call payload
-	pop args back into registers
-	stolen bytes
-
-	***jump table***
-	push rax, ABS ADDR
-	jmp rax
-	push rax, ABS ADDR
-	jmp rax
-	etc
-
-	*/
 }
 
