@@ -77,7 +77,7 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 		else if (inst.id == X86_INS_CALL)
 		{
 			calls.push_back({ i, numOriginBytes });
-			numBytes += 12;
+			numBytes += 14;
 		}
 		numOriginBytes += inst.size;
 		numBytes += inst.size;
@@ -137,7 +137,7 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 	{
 		cs_insn& instr = disassembledInstructions[call.first];
 		char* callTarget = instr.op_str;
-		uint8_t distToCallTable = jumpTablePos - (call.second + instr.size);
+		uint8_t distToCallTable = jumpTablePos - (call.second + 2); //+2 because we're rewriting the call to be a 2 byte relative jump
 
 		//calls need to be rewritten as relative jumps to the call table
 		//but we want to preserve the length of the instruction, so pad with NOPs 
@@ -146,14 +146,22 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 		memset(instr.bytes, 0x90, instr.size);
 		memcpy(instr.bytes, jmpBytes, sizeof(jmpBytes));
 
+		//(numOriginBytes-12) to get the the mov rax <addr> of the gap pointer jump
+		int8_t distToGapPtr = (numOriginBytes - 12) - (jumpTablePos + 14);
+
 		uint8_t callBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
 									0xFF, 0xD0, //call rax
+									0xEB, 0x00 //jmp back to immediately before jump/call table
 								};
-		
+	
+
+		memcpy(&callBytes[13], &distToGapPtr, 1);
+		//after the call, we need to jump to the jmp back to the target function, since the call will return into the call table
+
 		uint64_t targetAddr = _strtoui64(callTarget, NULL, 0);
 		memcpy(&callBytes[2], &targetAddr, 8);
 		memcpy(&outBuffer[jumpTablePos], callBytes, sizeof(callBytes));
-		jumpTablePos += 12;
+		jumpTablePos += 14;
 
 	}
 
