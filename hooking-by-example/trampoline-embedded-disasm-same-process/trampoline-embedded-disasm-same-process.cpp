@@ -20,6 +20,13 @@ __declspec(noinline) void TargetFunc(int x, float y)
 	}
 }
 
+_declspec(noinline) void CallTargetFunc(int x, float y)
+{
+	TargetFunc(x, y);
+	printf("Target func called\n");
+}
+
+
 
 struct HookDesc
 {
@@ -58,14 +65,14 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 	for (int i = 0; i < count; ++i)
 	{
 		cs_insn inst = disassembledInstructions[i];
-
+		printf("%s %s\n", inst.mnemonic, inst.op_str);
 		//all condition jumps are relative, as are all E9 jmps. non-E9 "jmp" is absolute, so no need to deal with it
 		bool isRelJump = inst.id >= X86_INS_JAE && inst.id <= X86_INS_JS;
 		if (inst.id == X86_INS_JMP && inst.bytes[0] != 0xE9) isRelJump = false;
 		if (isRelJump)
 		{
 			jumps.push_back({ i,numOriginBytes });
-			numBytes += 12;
+			numBytes += 12; //size of absolute jump in jump table
 		}
 		else if (inst.id == X86_INS_CALL)
 		{
@@ -104,12 +111,19 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 		cs_insn& instr = disassembledInstructions[jmp.first];
 		char* jmpTargetAddr = instr.op_str;
 		uint8_t distToJumpTable = jumpTablePos - (jmp.second + instr.size);
-		
-		//all 2 byte jump opcodes start with 0f
-		//if 2 bytes, the operand is larger than a uint8 ... so TODO
-		uint8_t* operand = instr.bytes[0] == 0x0F ? &instr.bytes[2] : &instr.bytes[1];
-		*operand = distToJumpTable;
 
+		//there's so many different jump opcodes, that it makes totally replacing the instruction bytes untenable
+		//instead, we'll just rewrite the operand for the jump to go to the jump table
+		uint8_t instrByteSize = instr.bytes[0] == 0x0F ? 2 : 1;
+		uint8_t operandSize = instr.size - instrByteSize;
+		
+		switch (operandSize)
+		{
+		case 1: instr.bytes[instrByteSize] = distToJumpTable; break;
+		case 2: {uint16_t dist16 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist16, 2); } break;
+		case 4: {uint32_t dist32 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist32, 4);} break;
+		}
+	
 		uint8_t jmpBytes[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs into rax
 								0xFF, 0xE0 }; //jmp rax
 		uint64_t targetAddr = _strtoui64(jmpTargetAddr, NULL, 0);
@@ -121,9 +135,26 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 
 	for (auto call : calls)
 	{
-		char* callOperand = disassembledInstructions[call.first].op_str;
-		uint32_t distToCallTable = jumpTablePos - call.second;
+		cs_insn& instr = disassembledInstructions[call.first];
+		char* callTarget = instr.op_str;
+		uint8_t distToCallTable = jumpTablePos - (call.second + instr.size);
+
+		//calls need to be rewritten as relative jumps to the call table
+		//but we want to preserve the length of the instruction, so pad with NOPs 
+		uint8_t jmpBytes[2] = { 0xEB, 0x00 };
+		memcpy(jmpBytes + 1, &distToCallTable, sizeof(distToCallTable));
+		memset(instr.bytes, 0x90, instr.size);
+		memcpy(instr.bytes, jmpBytes, sizeof(jmpBytes));
+
+		uint8_t callBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
+									0xFF, 0xD0, //call rax
+								};
+		
+		uint64_t targetAddr = _strtoui64(callTarget, NULL, 0);
+		memcpy(&callBytes[2], &targetAddr, 8);
+		memcpy(&outBuffer[jumpTablePos], callBytes, sizeof(callBytes));
 		jumpTablePos += 12;
+
 	}
 
 	//similarly, all calls will be converted to relative jumps into a call table
@@ -190,20 +221,19 @@ void InstallHook(HookDesc* hook)
 int main(int argc, const char** argv)
 {	
 	float y = atof(argv[0]);
-	TargetFunc(argc, (float)argc);
+	CallTargetFunc(argc, (float)argc);
 	HookDesc hook = { 0 };
-	hook.originalFunc = TargetFunc;
+	hook.originalFunc = CallTargetFunc;
 	hook.payloadFunc = HookPayload;
 	hook.longJumpMem = AllocatePageNearAddress(TargetFunc);
 	hook.trampolineMem = AllocPage();
 
 	InstallHook(&hook);
 
-	TargetFunc(argc-1, (float)argc);
-	TargetFunc(argc, (float)argc);
-	TargetFunc(argc+1, (float)argc);
+	CallTargetFunc(argc-1, (float)argc);
+	CallTargetFunc(argc, (float)argc);
+	CallTargetFunc(argc+1, (float)argc);
 
 
 }
 
-#pragma optimize("", on)
