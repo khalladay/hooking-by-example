@@ -5,10 +5,6 @@
 #include "capstone/capstone.h"
 #include <vector>
 
-void HookPayload()
-{
-	printf("Hook executed\n");
-}
 
 __declspec(noinline) void TargetFunc(int x, float y)
 {
@@ -22,11 +18,16 @@ __declspec(noinline) void TargetFunc(int x, float y)
 
 _declspec(noinline) void CallTargetFunc(int x, float y)
 {
+	if (x > 0) CallTargetFunc(x - 1, y);
 	TargetFunc(x, y);
 	printf("Target func called\n");
 }
 
-
+void HookPayload()
+{
+	printf("Hook executed\n");
+//	CallTargetFunc(5, 0.0);
+}
 
 struct HookDesc
 {
@@ -41,7 +42,35 @@ struct HookDesc
 
 extern "C" void call_hook_payload();
 
-#pragma optimize("", off)
+//#pragma optimize("", off)
+
+uint8_t WriteAbsoluteCallBytes(uint8_t* dst, void* funcToCall)
+{
+	uint8_t callAsmBytes[] = 
+	{ 
+		0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
+		0xFF, 0xD0, //call rax
+	};
+	memcpy(&callAsmBytes[2], &funcToCall, sizeof(void*));
+	memcpy(dst, &callAsmBytes, sizeof(callAsmBytes));
+
+	return sizeof(callAsmBytes);
+}
+
+uint8_t WriteAbsoluteJmpBytes(uint8_t* dst, void* addrToJumpTo)
+{
+	uint8_t jmpBytes[] =
+	{
+		0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs into rax
+		0xFF, 0xE0  //jmp rax
+	};
+
+	memcpy(&jmpBytes[2], &addrToJumpTo, sizeof(void*));
+	memcpy(dst, &jmpBytes, sizeof(jmpBytes));
+
+	return sizeof(jmpBytes);
+}
+
 //converts relative instructions to absolute ones
 uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** outGapPtr, uint32_t outBufferSize)
 {
@@ -65,7 +94,6 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 	for (int i = 0; i < count; ++i)
 	{
 		cs_insn inst = disassembledInstructions[i];
-		printf("%s %s\n", inst.mnemonic, inst.op_str);
 		//all condition jumps are relative, as are all E9 jmps. non-E9 "jmp" is absolute, so no need to deal with it
 		bool isRelJump = inst.id >= X86_INS_JAE && inst.id <= X86_INS_JS;
 		if (inst.id == X86_INS_JMP && inst.bytes[0] != 0xE9) isRelJump = false;
@@ -86,7 +114,6 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 	}
 	*outGapPtr = &outBuffer[numOriginBytes];
 	hook->stolenInstructionSize = numOriginBytes;
-	numOriginBytes += 12; //enough for the jmp back to the original function 
 	numBytes += 12;
 	//relative jumps need to be converted to absolute, 64 bit jumps
 	//but since those require the destruction of a register, I'm going
@@ -104,7 +131,7 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 						   |		jmp rax
 	*/
 
-	uint32_t jumpTablePos = numOriginBytes;
+	uint32_t jumpTablePos = numOriginBytes + 12;
 
 	for (auto jmp : jumps)
 	{
@@ -112,25 +139,21 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 		char* jmpTargetAddr = instr.op_str;
 		uint8_t distToJumpTable = jumpTablePos - (jmp.second + instr.size);
 
-		//there's so many different jump opcodes, that it makes totally replacing the instruction bytes untenable
-		//instead, we'll just rewrite the operand for the jump to go to the jump table
+		//rewrite the operand for the jump to go to the jump table
 		uint8_t instrByteSize = instr.bytes[0] == 0x0F ? 2 : 1;
 		uint8_t operandSize = instr.size - instrByteSize;
 		
 		switch (operandSize)
 		{
-		case 1: instr.bytes[instrByteSize] = distToJumpTable; break;
-		case 2: {uint16_t dist16 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist16, 2); } break;
-		case 4: {uint32_t dist32 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist32, 4);} break;
+			case 1: instr.bytes[instrByteSize] = distToJumpTable; break;
+			case 2: {uint16_t dist16 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist16, 2); } break;
+			case 4: {uint32_t dist32 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist32, 4);} break;
 		}
 	
-		uint8_t jmpBytes[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs into rax
-								0xFF, 0xE0 }; //jmp rax
 		uint64_t targetAddr = _strtoui64(jmpTargetAddr, NULL, 0);
-		memcpy(&jmpBytes[2], &targetAddr, 8);
-		memcpy(&outBuffer[jumpTablePos], jmpBytes, sizeof(jmpBytes));
+		WriteAbsoluteJmpBytes(&outBuffer[jumpTablePos], (void*)targetAddr);
+		
 		jumpTablePos += 12;
-			
 	}
 
 	for (auto call : calls)
@@ -146,26 +169,18 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 		memset(instr.bytes, 0x90, instr.size);
 		memcpy(instr.bytes, jmpBytes, sizeof(jmpBytes));
 
-		//(numOriginBytes-12) to get the the mov rax <addr> of the gap pointer jump
-		int8_t distToGapPtr = (numOriginBytes - 12) - (jumpTablePos + 14);
-
-		uint8_t callBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
-									0xFF, 0xD0, //call rax
-									0xEB, 0x00 //jmp back to immediately before jump/call table
-								};
+		int8_t distToGapPtr = (numOriginBytes) - (jumpTablePos + 14);
 	
-
-		memcpy(&callBytes[13], &distToGapPtr, 1);
+		memcpy(jmpBytes+1, &distToGapPtr, 1);
 		//after the call, we need to jump to the jmp back to the target function, since the call will return into the call table
 
 		uint64_t targetAddr = _strtoui64(callTarget, NULL, 0);
-		memcpy(&callBytes[2], &targetAddr, 8);
-		memcpy(&outBuffer[jumpTablePos], callBytes, sizeof(callBytes));
+		uint8_t callSize = WriteAbsoluteCallBytes(&outBuffer[jumpTablePos], (void*)targetAddr);
+		
+		memcpy(&outBuffer[jumpTablePos+callSize], jmpBytes, sizeof(jmpBytes));
 		jumpTablePos += 14;
 
 	}
-
-	//similarly, all calls will be converted to relative jumps into a call table
 
 	uint32_t writePos = 0;
 	for (int i = 0; i < numInstructions; ++i)
@@ -182,54 +197,30 @@ uint32_t BuildStolenByteBuffer(HookDesc* hook, uint8_t* outBuffer, uint8_t** out
 void InstallHook(HookDesc* hook)
 {
 	DWORD oldProtect;
-	bool err = VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
+	check(VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
 
-	uint8_t stolenBytes[1024];
 	uint8_t* jmpBackLoc = nullptr;
-	uint32_t numStolenBytes = BuildStolenByteBuffer(hook, stolenBytes, &jmpBackLoc, 1024);
-
-	uint8_t callAsmBytes[] = {	0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
-								0xFF, 0xD0, //call rax
-							};
-
-	memcpy(&callAsmBytes[2], &hook->payloadFunc, sizeof(uint64_t));
-	//write trampoline func
-	uint64_t addrOfCallHookPayload = (uint64_t)call_hook_payload;
-	err = VirtualProtect(call_hook_payload, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
-	uint8_t* payloadPtr = (uint8_t*)call_hook_payload;
-	memcpy(&payloadPtr[33], &callAsmBytes, sizeof(callAsmBytes));
-
-	memcpy(&callAsmBytes[2], &addrOfCallHookPayload, sizeof(uint64_t));
-
-	uint8_t jmpBytes[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs into rax
-							0xFF, 0xE0 }; //jmp rax
-
-	uint64_t orignFuncPostJmp = uint64_t(hook->originalFunc) + 5;
-	memcpy(&jmpBytes[2], &orignFuncPostJmp, sizeof(void*));
-
-	uint8_t* trampolineBytePtr = (uint8_t*)hook->trampolineMem;
-
-	uint64_t hookPayloadAddr = (uint64_t)call_hook_payload;
-	memcpy(trampolineBytePtr, &callAsmBytes, sizeof(callAsmBytes));
-	trampolineBytePtr += sizeof(callAsmBytes);
-
-	memcpy(jmpBackLoc, jmpBytes, sizeof(jmpBytes));
 	
-	memcpy(trampolineBytePtr, stolenBytes, numStolenBytes);
-	trampolineBytePtr += numStolenBytes;
+	uint8_t stolenBytes[1024];
+	uint32_t numStolenBytes = BuildStolenByteBuffer(hook, stolenBytes, &jmpBackLoc, 1024);
+	WriteAbsoluteJmpBytes(jmpBackLoc, (uint8_t*)hook->originalFunc + 5);
+	
+	//write trampoline func
+	check(VirtualProtect(call_hook_payload, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
+	WriteAbsoluteCallBytes( &((uint8_t*)call_hook_payload)[33], hook->payloadFunc);
+	
+	WriteAbsoluteCallBytes((uint8_t*)hook->trampolineMem, call_hook_payload);
+	memcpy(&((uint8_t*)hook->trampolineMem)[12], stolenBytes, numStolenBytes);
 	
 	//write jumps
 	WriteAbsoluteJump64(hook->longJumpMem, hook->trampolineMem);
 	WriteRelativeJump(hook->originalFunc, hook->longJumpMem, hook->stolenInstructionSize - 5);
-
 }
 
 int main(int argc, const char** argv)
 {	
 	float y = atof(argv[0]);
-	CallTargetFunc(argc, (float)argc);
+//	CallTargetFunc(argc, (float)argc);
 	HookDesc hook = { 0 };
 	hook.originalFunc = CallTargetFunc;
 	hook.payloadFunc = HookPayload;
@@ -238,8 +229,8 @@ int main(int argc, const char** argv)
 
 	InstallHook(&hook);
 
-	CallTargetFunc(argc-1, (float)argc);
-	CallTargetFunc(argc, (float)argc);
+	//CallTargetFunc(argc-1, (float)argc);
+//	CallTargetFunc(argc, (float)argc);
 	CallTargetFunc(argc+1, (float)argc);
 
 
