@@ -20,18 +20,39 @@ _declspec(noinline) void CallTargetFunc(int x, float y)
 {
 	if (x > 0) CallTargetFunc(x - 1, y);
 	TargetFunc(x, y);
-	printf("Target func called\n");
+	printf("Target func called %i\n", x);
 }
 
-void HookPayload()
+
+//this hardcoded gate function pointer could be replaced with something like a giant array of HookDescs that all contain gatePtrs
+//and have the pre-hookpayload hook code set an ID for the currently active hook, then have the HookPayload func use that id to get the
+//appropriate gate function pointer out of the global hook array. thread_local issues apply. 
+
+void(*CallTargetGate)(int, float) = nullptr;
+void HookPayload(int x, float y)
 {
+	//the static int check breaks if different functions or different threads all reroute to this payload
+	//I think thread_local at least solves the thread problem
+	thread_local static int r = 0;
+
 	printf("Hook executed\n");
-//	CallTargetFunc(5, 0.0);
+	if (r == 0)
+	{
+		r = 1;
+		CallTargetGate(5, y);
+	}
+	else
+	{
+		CallTargetGate(x, y);
+	}
+	r = 0;
 }
+
 
 struct HookDesc
 {
 	void* originalFunc;
+	void(**gatePtr)(int, float);
 	void* payloadFunc;
 	void* trampolineMem;
 	void* longJumpMem;
@@ -42,7 +63,7 @@ struct HookDesc
 
 extern "C" void call_hook_payload();
 
-//#pragma optimize("", off)
+#pragma optimize("", off)
 
 uint8_t WriteAbsoluteCallBytes(uint8_t* dst, void* funcToCall)
 {
@@ -209,9 +230,14 @@ void InstallHook(HookDesc* hook)
 	check(VirtualProtect(call_hook_payload, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
 	WriteAbsoluteCallBytes( &((uint8_t*)call_hook_payload)[33], hook->payloadFunc);
 	
-	WriteAbsoluteCallBytes((uint8_t*)hook->trampolineMem, call_hook_payload);
+	WriteAbsoluteJmpBytes((uint8_t*)hook->trampolineMem, hook->payloadFunc);
+
+
+	//WriteAbsoluteCallBytes((uint8_t*)hook->trampolineMem, call_hook_payload);
+
+
 	memcpy(&((uint8_t*)hook->trampolineMem)[12], stolenBytes, numStolenBytes);
-	
+	*hook->gatePtr = (void(*)(int,float))&(((uint8_t*)hook->trampolineMem)[12]);
 	//write jumps
 	WriteAbsoluteJump64(hook->longJumpMem, hook->trampolineMem);
 	WriteRelativeJump(hook->originalFunc, hook->longJumpMem, hook->stolenInstructionSize - 5);
@@ -223,6 +249,7 @@ int main(int argc, const char** argv)
 //	CallTargetFunc(argc, (float)argc);
 	HookDesc hook = { 0 };
 	hook.originalFunc = CallTargetFunc;
+	hook.gatePtr = &CallTargetGate;
 	hook.payloadFunc = HookPayload;
 	hook.longJumpMem = AllocatePageNearAddress(TargetFunc);
 	hook.trampolineMem = AllocPage();
@@ -231,7 +258,7 @@ int main(int argc, const char** argv)
 
 	//CallTargetFunc(argc-1, (float)argc);
 //	CallTargetFunc(argc, (float)argc);
-	CallTargetFunc(argc+1, (float)argc);
+	CallTargetFunc(0, (float)argc);
 
 
 }
