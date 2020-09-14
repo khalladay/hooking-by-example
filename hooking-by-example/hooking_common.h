@@ -296,7 +296,22 @@ DWORD FindPidByName(const char* name)
 	return 0;
 }
 
-void WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
+uint32_t WriteAbsoluteCall64(uint8_t* dst, void* funcToCall)
+{
+	check(IsProcess64Bit(GetCurrentProcess()));
+
+	uint8_t callAsmBytes[] =
+	{
+		0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
+		0xFF, 0xD0, //call rax
+	};
+	memcpy(&callAsmBytes[2], &funcToCall, sizeof(void*));
+	memcpy(dst, &callAsmBytes, sizeof(callAsmBytes));
+
+	return sizeof(callAsmBytes);
+}
+
+uint32_t WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
 {
 	check(IsProcess64Bit(GetCurrentProcess()));
 
@@ -312,9 +327,10 @@ void WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
 	check(err);
 
 	memcpy(absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
+	return sizeof(absJumpInstructions);
 }
 
-void WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
+uint32_t WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
 {
 	check(IsProcess64Bit(process));
 
@@ -330,9 +346,10 @@ void WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo
 	check(err);
 
 	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
+	return sizeof(absJumpInstructions);
 }
 
-void WriteRelativeJump(void* func2hook, void* jumpTarget)
+uint32_t WriteRelativeJump(void* func2hook, void* jumpTarget)
 {
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
@@ -348,10 +365,11 @@ void WriteRelativeJump(void* func2hook, void* jumpTarget)
 	check(err);
 
 	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
+	return sizeof(jmpInstruction);
 
 }
 
-void WriteRelativeJump(void* func2hook, void* jumpTarget, uint8_t numTrailingNOPs)
+uint32_t WriteRelativeJump(void* func2hook, void* jumpTarget, uint8_t numTrailingNOPs)
 {
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
@@ -373,10 +391,12 @@ void WriteRelativeJump(void* func2hook, void* jumpTarget, uint8_t numTrailingNOP
 	{
 		memset((void*)(byteFunc2Hook + 5 + i), 0x90, 1);
 	}
+
+	return sizeof(jmpInstruction) + numTrailingNOPs;
 }
 
 
-void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
+uint32_t WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
 {
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
@@ -393,6 +413,8 @@ void WriteRelativeJump(HANDLE process, void* func2hook, void* jumpTarget)
 
 	err = WriteProcessMemory(process, func2hook, jmpInstruction, sizeof(jmpInstruction), nullptr);
 	check(err);
+
+	return sizeof(jmpInstruction);
 }
 
 HMODULE FindModuleBaseAddress(HANDLE process, const char* targetModule)
