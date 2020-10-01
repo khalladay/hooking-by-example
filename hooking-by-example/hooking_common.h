@@ -296,6 +296,79 @@ DWORD FindPidByName(const char* name)
 	return 0;
 }
 
+uint32_t WriteMovToRCX(uint8_t* dst, uint64_t val)
+{
+	check(IsProcess64Bit(GetCurrentProcess()));
+
+	uint8_t movAsmBytes[] =
+	{
+		0x48, 0xB9, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rcx
+	};
+	memcpy(&movAsmBytes[2], &val, sizeof(uint64_t));
+	memcpy(dst, &movAsmBytes, sizeof(movAsmBytes));
+
+	return sizeof(movAsmBytes);
+
+}
+
+uint32_t WriteSaveArgumentRegisters(uint8_t* dst)
+{
+	uint8_t asmBytes[] =
+	{
+		0x51, //push rcx
+		0x52, //push rdx
+		0x41, 0x50, //push r8
+		0x41, 0x51, //push r9
+		0x48, 0x83, 0xEC, 0x40, //sub rsp, 64 -> space for xmm registers
+		0x0F, 0x11, 0x04, 0x24, // movups xmmword ptr [rsp],xmm0
+		0x0F, 0x11, 0x4C, 0x24, 0x10, //movups xmmword ptr [rsp+10h],xmm1
+		0x0F, 0x11, 0x54, 0x24, 0x20, //movups xmmword ptr [rsp+20h],xmm2
+		0x0F, 0x11, 0x5C, 0x24, 0x30 //movups  xmmword ptr [rsp+30h],xmm3
+	};
+	
+	memcpy(dst, &asmBytes, sizeof(asmBytes));
+	return sizeof(asmBytes);
+}
+
+uint32_t WriteRestoreArgumentRegisters(uint8_t* dst)
+{
+	uint8_t asmBytes[] =
+	{
+		0x0F, 0x10, 0x04, 0x24, //movups xmm0,xmmword ptr[rsp]
+		0x0F, 0x10, 0x4C, 0x24, 0x10,//movups xmm1,xmmword ptr[rsp + 10h]
+		0x0F, 0x10, 0x54, 0x24, 0x20,//movups xmm2,xmmword ptr[rsp + 20h]
+		0x0F, 0x10, 0x5C, 0x24, 0x30,//movups xmm3,xmmword ptr[rsp + 30h]
+		0x48, 0x83, 0xC4, 0x40,//add rsp,40h
+		0x41, 0x59,//pop r9
+		0x41, 0x58,//pop r8
+		0x5A,//pop rdx
+		0x59 //pop rcx
+	};
+
+	memcpy(dst, &asmBytes, sizeof(asmBytes));
+	return sizeof(asmBytes);
+}
+
+uint32_t WriteAddRSP32(uint8_t* dst)
+{
+	uint8_t addAsmBytes[] =
+	{
+		0x48, 0x83, 0xC4, 0x20
+	};
+	memcpy(dst, &addAsmBytes, sizeof(addAsmBytes));
+	return sizeof(addAsmBytes);
+}
+
+uint32_t WriteSubRSP32(uint8_t* dst)
+{
+	uint8_t subAsmBytes[] =
+	{
+		0x48, 0x83, 0xEC, 0x20
+	};
+	memcpy(dst, &subAsmBytes, sizeof(subAsmBytes));
+	return sizeof(subAsmBytes);
+}
+
 uint32_t WriteAbsoluteCall64(uint8_t* dst, void* funcToCall)
 {
 	check(IsProcess64Bit(GetCurrentProcess()));
@@ -464,4 +537,39 @@ void* FindAddressOfRemoteDLLFunction(HANDLE process, const char* dllName, const 
 	HMODULE remoteModuleBase = FindModuleBaseAddress(process, dllName);
 
 	return (void*)((uint64_t)remoteModuleBase + offsetOfHookFunc);
+}
+
+void SetOtherThreadsSuspended(bool suspend)
+{
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (hSnapshot != INVALID_HANDLE_VALUE)
+	{
+		THREADENTRY32 te;
+		te.dwSize = sizeof(THREADENTRY32);
+		if (Thread32First(hSnapshot, &te))
+		{
+			do
+			{
+				if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(DWORD))
+					&& te.th32OwnerProcessID == GetCurrentProcessId()
+					&& te.th32ThreadID != GetCurrentThreadId())
+				{
+
+					HANDLE thread = ::OpenThread(THREAD_ALL_ACCESS, FALSE, te.th32ThreadID);
+					if (thread != NULL)
+					{
+						if (suspend)
+						{
+							SuspendThread(thread);
+						}
+						else
+						{
+							ResumeThread(thread);
+						}
+						CloseHandle(thread);
+					}
+				}
+			} while (Thread32Next(hSnapshot, &te));
+		}
+	}
 }

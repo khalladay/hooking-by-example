@@ -1,73 +1,84 @@
-/*
-	Trampoline-embdedded-disasm-same-process
-
-	This program demonstrates how to use an disassembler (in this case, the capstone library) to
-	build trampolines for a function in a program WITHOUT having prior knowledge of the compiled
-	assembly for that function. 
-
-*/
-
+#include <windows.h>
 #include <stdio.h>
-#include <cstdlib>
+#include <stdint.h>
+#include <functional>
+#include <string>
+#include <thread>
 #include "capstone/x86.h"
 #include "../hooking_common.h"
 #include "capstone/capstone.h"
 #include <vector>
+#include <tlhelp32.h>
 
-
-__declspec(noinline) void TargetFunc(int x, float y)
+// Pass 0 as the targetProcessId to suspend threads in the current process
+void SetOtherThreadsSuspended(bool suspend)
 {
-	switch (x) 
+	HANDLE hSnapshot = CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+	if (hSnapshot != INVALID_HANDLE_VALUE)
 	{
-		case 0: printf("0 args %f\n", y); break;
-		case 1: printf("1 args %f\n", y); break;
-		default:printf(">1 args\n"); break;
+		THREADENTRY32 te;
+		te.dwSize = sizeof(THREADENTRY32);
+		if (Thread32First(hSnapshot, &te))
+		{
+			do
+			{
+				if (te.dwSize >= (FIELD_OFFSET(THREADENTRY32, th32OwnerProcessID) + sizeof(DWORD))
+					&& te.th32OwnerProcessID == GetCurrentProcessId()
+					&& te.th32ThreadID != GetCurrentThreadId())
+				{
+
+					HANDLE thread = ::OpenThread(THREAD_ALL_ACCESS, FALSE, te.th32ThreadID);
+					if (thread != NULL)
+					{
+						if (suspend)
+						{
+							SuspendThread(thread);
+						}
+						else
+						{
+							ResumeThread(thread);
+						}
+						CloseHandle(thread);
+					}
+				}
+			}
+			while (Thread32Next(hSnapshot, &te));
+		}
 	}
 }
 
-_declspec(noinline) void CallTargetFunc(int x, float y)
+__declspec(noinline) std::string NextHash(std::string s, int x)
 {
-	if (x > 0) CallTargetFunc(x-1, y);
-	TargetFunc(x, y);
-	printf("Calling with x: %i y: %f \n", x, y);
+	if (x > 0) return NextHash(s, x - 1);
+
+	return std::to_string(std::hash<std::string>{}( s ));
 }
 
-
-//this hardcoded gate function pointer could be replaced with something like a giant array of HookDescs that all contain gatePtrs
-//and have the pre-hookpayload hook code set an ID for the currently active hook, then have the HookPayload func use that id to get the
-//appropriate gate function pointer out of the global hook array. thread_local issues apply. 
-void(*CallTargetGate)(int, float) = nullptr;
-void HookPayload(int x, float y)
+void(*HookPayloadGate)(int, float) = nullptr;
+__declspec(noinline) std::string NextHashHookPayload(std::string s, int x)
 {
-	printf("Hook Executed\n");
+	return "Hook";
+}
 
-	//the function being hooked (CallTargetFunc) is recursive, so we need to make sure 
-	//that we only replace the arguments for the first call in a sequence
-	//thread_local not technically needed here since we only have one thread, but included 
-	//to show off how this could work in a multi-threaded project
-	thread_local static int recurseGuard = 0;
-
-	if (!recurseGuard)
+void CountingThreadMain()
+{
+	std::string val = "START";
+	while (1)
 	{
-		recurseGuard = 1;
-		CallTargetGate(5, y);
+		val = NextHash(val, 5);
+		printf("%s", val.c_str());
 	}
-	else
-	{
-		CallTargetGate(x, y);
-	}
-	recurseGuard = 0;
 }
 
 struct HookDesc
 {
-	void* originalFunc;
-	void(**gatePtr)(int, float);
-	void* payloadFunc;
-	void* trampolineMem;
-	void* longJumpMem;
+    void* originalFunc;
+    void(**gatePtr)(int, float);
+    void* payloadFunc;
+    void* trampolineMem;
+    void* longJumpMem;
 
-	uint8_t stolenInstructionSize;
+    uint8_t stolenInstructionSize;
 };
 
 uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBufferSize)
@@ -92,11 +103,11 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	for (int i = 0; i < count; ++i)
 	{
 		cs_insn inst = disassembledInstructions[i];
-		
+
 		//all condition jumps are relative, as are all E9 jmps. non-E9 "jmp" is absolute, so no need to deal with it
-		bool isRelJump = inst.id >= X86_INS_JAE && 
-						 inst.id <= X86_INS_JS &&
-						 !(inst.id == X86_INS_JMP && inst.bytes[0] != 0xE9);
+		bool isRelJump = inst.id >= X86_INS_JAE &&
+			inst.id <= X86_INS_JS &&
+			!(inst.id == X86_INS_JMP && inst.bytes[0] != 0xE9);
 
 		if (isRelJump)
 		{
@@ -144,17 +155,17 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 		//rewrite the operand for the jump to go to the jump table
 		uint8_t instrByteSize = instr.bytes[0] == 0x0F ? 2 : 1;
 		uint8_t operandSize = instr.size - instrByteSize;
-		
+
 		switch (operandSize)
 		{
-			case 1: instr.bytes[instrByteSize] = distToJumpTable; break;
-			case 2: {uint16_t dist16 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist16, 2); } break;
-			case 4: {uint32_t dist32 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist32, 4);} break;
+		case 1: instr.bytes[instrByteSize] = distToJumpTable; break;
+		case 2: {uint16_t dist16 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist16, 2); } break;
+		case 4: {uint32_t dist32 = distToJumpTable; memcpy(&instr.bytes[instrByteSize], &dist32, 4); } break;
 		}
-	
+
 		uint64_t targetAddr = _strtoui64(jmpTargetAddr, NULL, 0);
 		WriteAbsoluteJump64(&outBuffer[jumpTablePos], (void*)targetAddr);
-		
+
 		jumpTablePos += 12;
 	}
 
@@ -172,10 +183,10 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 
 		uint64_t targetAddr = _strtoui64(callTarget, NULL, 0);
 		uint32_t callSize = WriteAbsoluteCall64(&outBuffer[jumpTablePos], (void*)targetAddr);
-		
+
 		//after the call, we need a jump back to the end of the function gate in order to jump back to the origin function
-		jmpBytes[1] = (numStolenBytes) - (jumpTablePos + 14);
-		memcpy(&outBuffer[jumpTablePos+callSize], jmpBytes, sizeof(jmpBytes));
+		jmpBytes[1] = (numStolenBytes)-(jumpTablePos + 14);
+		memcpy(&outBuffer[jumpTablePos + callSize], jmpBytes, sizeof(jmpBytes));
 
 		jumpTablePos += 14;
 	}
@@ -197,7 +208,7 @@ void InstallHook(HookDesc* hook)
 {
 	DWORD oldProtect;
 	check(VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
-	
+
 	uint8_t functionGateBytes[1024];
 	uint32_t functionGateSize = BuildFunctionGate(hook, functionGateBytes, 1024);
 
@@ -212,15 +223,26 @@ void InstallHook(HookDesc* hook)
 	WriteRelativeJump(hook->originalFunc, hook->longJumpMem, hook->stolenInstructionSize - 5);
 }
 
-int main(int argc, const char** argv)
-{	
-	HookDesc hook = { 0 };
-	hook.originalFunc = CallTargetFunc;
-	hook.gatePtr = &CallTargetGate;
-	hook.payloadFunc = HookPayload;
-	hook.longJumpMem = AllocatePageNearAddress(TargetFunc);
-	hook.trampolineMem = AllocPage();
-	InstallHook<void(*)(int, float)>(&hook);
-	CallTargetFunc(10, (float)argc);
-}
 
+int main()
+{	
+	for (int32_t i = 0; i < 1000; ++i)
+	{
+		std::thread countThread(CountingThreadMain);
+		countThread.detach();
+	}
+ 	
+	HookDesc hook = { 0 };
+	hook.originalFunc = NextHash;
+	hook.gatePtr = &HookPayloadGate;
+	hook.payloadFunc = NextHashHookPayload;
+	hook.longJumpMem = AllocatePageNearAddress(NextHash);
+	hook.trampolineMem = AllocPage();
+
+	SetOtherThreadsSuspended(true);
+	Sleep(1000.0f); //only for illustrative purposes, so you see the pause in the output when runnign the program
+	InstallHook<void(*)(int, float)>(&hook);
+	SetOtherThreadsSuspended(false);
+	while (1) {};
+	return 0;
+}

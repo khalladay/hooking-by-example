@@ -21,7 +21,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SharedCode", "_SharedCode"
 	ProjectSection(SolutionItems) = preProject
 		hooking_asm.asm = hooking_asm.asm
 		hooking_common.h = hooking_common.h
-		trampoline_common.h = trampoline_common.h
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Hooking Functions In Same Process", "Hooking Functions In Same Process", "{CADDEDDB-440B-40F9-B58C-D2CEEFF9CA09}"
@@ -58,9 +57,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Complex Targets", "Complex 
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trampoline-free-function-same-process", "trampoline-free-function-same-process\trampoline-free-function-same-process.vcxproj", "{41292C23-F5C7-4547-93C2-14F67CC8FF2E}"
 EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trampoline-member-function-same-process", "trampoline-member-function-same-process\trampoline-member-function-same-process.vcxproj", "{14E8B6CD-883D-4F93-BD65-2E45CED193BD}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "trampoline-embedded-disasm-same-process", "trampoline-embedded-disasm-same-process\trampoline-embedded-disasm-same-process.vcxproj", "{68361B1D-7C5F-498B-A1BD-3686B272C2CF}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "multiple-trampolines-multiple-hooks", "multiple-trampolines-multiple-hooks\multiple-trampolines-multiple-hooks.vcxproj", "{1C29B985-75E6-49A5-B526-08F9897C6696}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "threadsafe-trampoline-install", "threadsafe-trampoline-install\threadsafe-trampoline-install.vcxproj", "{8F337C00-842C-4BA3-833B-EDCEA439B753}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -190,14 +191,6 @@ Global
 		{41292C23-F5C7-4547-93C2-14F67CC8FF2E}.Release|x64.Build.0 = Release|x64
 		{41292C23-F5C7-4547-93C2-14F67CC8FF2E}.Release|x86.ActiveCfg = Release|Win32
 		{41292C23-F5C7-4547-93C2-14F67CC8FF2E}.Release|x86.Build.0 = Release|Win32
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Debug|x64.ActiveCfg = Debug|x64
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Debug|x64.Build.0 = Debug|x64
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Debug|x86.ActiveCfg = Debug|Win32
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Debug|x86.Build.0 = Debug|Win32
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Release|x64.ActiveCfg = Release|x64
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Release|x64.Build.0 = Release|x64
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Release|x86.ActiveCfg = Release|Win32
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD}.Release|x86.Build.0 = Release|Win32
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Debug|x64.ActiveCfg = Debug|x64
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Debug|x64.Build.0 = Debug|x64
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Debug|x86.ActiveCfg = Debug|Win32
@@ -206,6 +199,22 @@ Global
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Release|x64.Build.0 = Release|x64
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Release|x86.ActiveCfg = Release|Win32
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF}.Release|x86.Build.0 = Release|Win32
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Debug|x64.ActiveCfg = Debug|x64
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Debug|x64.Build.0 = Debug|x64
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Debug|x86.ActiveCfg = Debug|Win32
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Debug|x86.Build.0 = Debug|Win32
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Release|x64.ActiveCfg = Release|x64
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Release|x64.Build.0 = Release|x64
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Release|x86.ActiveCfg = Release|Win32
+		{1C29B985-75E6-49A5-B526-08F9897C6696}.Release|x86.Build.0 = Release|Win32
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Debug|x64.ActiveCfg = Debug|x64
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Debug|x64.Build.0 = Debug|x64
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Debug|x86.ActiveCfg = Debug|Win32
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Debug|x86.Build.0 = Debug|Win32
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Release|x64.ActiveCfg = Release|x64
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Release|x64.Build.0 = Release|x64
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Release|x86.ActiveCfg = Release|Win32
+		{8F337C00-842C-4BA3-833B-EDCEA439B753}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -232,8 +241,9 @@ Global
 		{AF5D0A4A-A507-4151-B226-C4DAD9EF9C51} = {6B749FD3-16EE-436E-9DE8-F0E00C71426B}
 		{BA9D7F96-5902-4E4F-AA3E-B4A527E28296} = {6B749FD3-16EE-436E-9DE8-F0E00C71426B}
 		{41292C23-F5C7-4547-93C2-14F67CC8FF2E} = {04DCAF76-0A2C-4144-A281-A6DBA958FFA7}
-		{14E8B6CD-883D-4F93-BD65-2E45CED193BD} = {04DCAF76-0A2C-4144-A281-A6DBA958FFA7}
 		{68361B1D-7C5F-498B-A1BD-3686B272C2CF} = {04DCAF76-0A2C-4144-A281-A6DBA958FFA7}
+		{1C29B985-75E6-49A5-B526-08F9897C6696} = {04DCAF76-0A2C-4144-A281-A6DBA958FFA7}
+		{8F337C00-842C-4BA3-833B-EDCEA439B753} = {04DCAF76-0A2C-4144-A281-A6DBA958FFA7}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {20C0AF83-C1EC-4FAF-85B1-54BFA2106DC3}
