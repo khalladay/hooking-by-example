@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{1c29b985-75e6-49a5-b526-08f9897c6696}</ProjectGuid>
-    <RootNamespace>multipletrampolinesmultiplehooks</RootNamespace>
+    <ProjectGuid>{9a1b03ff-c058-4cf0-a125-c70d22d456b8}</ProjectGuid>
+    <RootNamespace>trampolineimportedfuncwithdllinjection</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -71,7 +71,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental>true</LinkIncremental>
     <IncludePath>..\..\extermal\include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\external\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
@@ -83,7 +83,7 @@
     <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>false</LinkIncremental>
+    <LinkIncremental>true</LinkIncremental>
     <IncludePath>..\..\extermal\include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\external\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
@@ -159,7 +159,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="multiple-trampolines-multiple-hooks.cpp" />
+    <ClCompile Include="trampoline-imported-func-with-dll-injection.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

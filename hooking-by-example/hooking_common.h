@@ -217,6 +217,88 @@ void RebaseVirtualDrivePath(const char* path, char* outBuff, size_t outBuffSize)
 	}
 }
 
+//returns the first module called "name" -> only searches for dll name, not whole path
+//ie: somepath/subdir/mydll.dll can be searched for with "mydll.dll"
+HMODULE FindModuleInProcess(HANDLE process, const char* name)
+{
+	HMODULE remoteProcessModules[1024];
+	DWORD numBytesWrittenInModuleArray = 0;
+	BOOL success = EnumProcessModules(process, remoteProcessModules, sizeof(HMODULE) * 1024, &numBytesWrittenInModuleArray);
+
+	if (!success)
+	{
+		fprintf(stderr, "Error enumerating modules on target process. Error Code %lu \n", GetLastError());
+		DebugBreak();
+	}
+
+	DWORD numRemoteModules = numBytesWrittenInModuleArray / sizeof(HMODULE);
+	CHAR remoteProcessName[256];
+	GetModuleFileNameEx(process, NULL, remoteProcessName, 256); //a null module handle gets the process name
+	LowercaseInPlace(remoteProcessName);
+
+	MODULEINFO remoteProcessModuleInfo;
+	HMODULE remoteProcessModule = 0; //An HMODULE is just the DLL's base address 
+
+	for (DWORD i = 0; i < numRemoteModules; ++i)
+	{
+		CHAR moduleName[256];
+		CHAR absoluteModuleName[256];
+		CHAR rebasedPath[256] = { 0 };
+		GetModuleFileNameEx(process, remoteProcessModules[i], moduleName, 256);
+		char* lastSlash = strrchr(moduleName, '\\');
+		if (!lastSlash) lastSlash = strrchr(moduleName, '/');
+
+		char* dllName = lastSlash + 1;
+		LowercaseInPlace(dllName);
+
+		if (strcmp(dllName, name) == 0)
+		{
+			remoteProcessModule = remoteProcessModules[i];
+
+			success = GetModuleInformation(process, remoteProcessModules[i], &remoteProcessModuleInfo, sizeof(MODULEINFO));
+			check(success);
+			return remoteProcessModule;
+		}
+		//the following string operations are to account for cases where GetModuleFileNameEx
+		//returns a relative path rather than an absolute one, the path we get to the module
+		//is using a virtual drive letter (ie: one created by subst) rather than a real drive
+		char* err = _fullpath(absoluteModuleName, moduleName, 256);
+		check(err);
+	}
+		
+}
+
+void PrintModulesForProcess(HANDLE process)
+{
+	HMODULE remoteProcessModules[1024];
+	DWORD numBytesWrittenInModuleArray = 0;
+	BOOL success = EnumProcessModules(process, remoteProcessModules, sizeof(HMODULE) * 1024, &numBytesWrittenInModuleArray);
+
+	if (!success)
+	{
+		fprintf(stderr, "Error enumerating modules on target process. Error Code %lu \n", GetLastError());
+		DebugBreak();
+	}
+
+	DWORD numRemoteModules = numBytesWrittenInModuleArray / sizeof(HMODULE);
+	MODULEINFO remoteProcessModuleInfo;
+	HMODULE remoteProcessModule = 0; //An HMODULE is just the DLL's base address 
+
+	for (DWORD i = 0; i < numRemoteModules; ++i)
+	{
+		CHAR moduleName[256];
+		CHAR absoluteModuleName[256];
+		GetModuleFileNameEx(process, remoteProcessModules[i], moduleName, 256);
+
+		//the following string operations are to account for cases where GetModuleFileNameEx
+		//returns a relative path rather than an absolute one, the path we get to the module
+		//is using a virtual drive letter (ie: one created by subst) rather than a real drive
+		char* err = _fullpath(absoluteModuleName, moduleName, 256);
+		check(err);
+		printf("%s\n", absoluteModuleName);
+	}
+}
+
 HMODULE GetBaseModuleForProcess(HANDLE process)
 {
 	HMODULE remoteProcessModules[1024];

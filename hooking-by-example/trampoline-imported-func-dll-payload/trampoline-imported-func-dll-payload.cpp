@@ -1,36 +1,30 @@
-#include <windows.h>
+#include "trampoline-imported-func-dll-payload.h"
 #include <stdio.h>
-#include <stdint.h>
-#include <functional>
-#include <string>
-#include <thread>
+#include <stack>
+#include <vector>
 #include "capstone/x86.h"
 #include "../hooking_common.h"
 #include "capstone/capstone.h"
-#include <vector>
-#include <tlhelp32.h>
-#include <functional>
-#include <stack>
-#include <map>
-#include <thread>
 
-class Dog
+
+
+#define TARGET_APP_NAME "target-with-functions-from-dll.exe"
+#define DLL_NAME "getnum-dll.dll"
+#define FUNC2HOOK_NAME "getNum"
+
+/**************************
+ * HOOKING CODE           *
+ **************************/
+struct HookDesc
 {
-public:
-	Dog(std::string inName) :
-		name(inName)
-	{
-	}
+	void* originalFunc;
+	void* payloadFunc;
+	void* trampolineMem;
+	void* longJumpMem;
 
-	_declspec(noinline) void Bark() { printf("Barked\n"); }
-	_declspec(noinline) void RollOver(int x) { printf("Rolled Over %i times\n", x); }
-	_declspec(noinline) void Sit() { printf("Sat Down\n"); }
-
-public:
-	std::string name;
+	uint8_t stolenInstructionSize;
 };
 
-//thread local assembly is gnarly, so let's let the compiler handle it, we'll just call these funcs
 thread_local std::stack<uint64_t> hookJumpAddresses;
 
 void PushAddress(uint64_t addr) //push the address of the jump target
@@ -44,39 +38,6 @@ void PopAddress(uint64_t gatePointer)
 	hookJumpAddresses.pop();
 	memcpy((void*)gatePointer, &addr, sizeof(uint64_t));
 }
-
-//So here's the deal - we can't just insert a function call before the call to the payload to set a thread_local pointer back to the target function, 
-//because payloads can call other hooked functions. We probably want to have a thread_local stack of function pointers, and have
-//the gate function pop the top of the stack and use that as the actual address to jump back to
-
-thread_local void (*dogActionGate)(Dog*);
-void DogActionPayload(Dog* thisPtr)
-{
-	printf("%s: ", thisPtr->name.c_str());
-
-	PopAddress(uint64_t(&dogActionGate));
-	dogActionGate(thisPtr);
-}
-
-thread_local void (*dogCountActionGate)(Dog*, int);
-void DogCountedActionPayload(Dog* thisPtr, int count)
-{
-	printf("%s: ", thisPtr->name.c_str());
-
-	PopAddress(uint64_t(&dogCountActionGate));
-	dogCountActionGate(thisPtr, count);
-}
-
-
-struct HookDesc
-{
-	void* originalFunc;
-	void* payloadFunc;
-	void* trampolineMem;
-	void* longJumpMem;
-
-	uint8_t stolenInstructionSize;
-};
 
 uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBufferSize)
 {
@@ -200,124 +161,66 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	return numTotalBytes;
 }
 
-
-template<typename FunctionSignature>
-void InstallHook(HookDesc* hook)
+void InstallHook(void* targetFunc, void* payloadFunc)
 {
+	HookDesc hook = { 0 };
+	hook.originalFunc = targetFunc;
+	hook.payloadFunc = payloadFunc;
+	hook.trampolineMem = AllocPage();
+	hook.longJumpMem = AllocatePageNearAddress(targetFunc);
+
+
 	SetOtherThreadsSuspended(true);
 
 	DWORD oldProtect;
-	check(VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
+	check(VirtualProtect(hook.originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
 
 	uint8_t functionGateBytes[1024];
-	uint32_t functionGateSize = BuildFunctionGate(hook, functionGateBytes, 1024);
+	uint32_t functionGateSize = BuildFunctionGate(&hook, functionGateBytes, 1024);
 
-	//first, let's write out the trampoline, which consists of:
-	// 1. Pushing the address of the desired gate function onto the thread_local stack
-	// 2. a jump to the hook payload
-	// 3. a call to essentially a gate switchboard, which jumps to the gate at the address on the top of the thread_local stack
+	uint8_t* trampolineIter = (uint8_t*)hook.trampolineMem;
 
+	uint64_t gateFuncAddress = (uint64_t)(trampolineIter)+100;
 
-	/*
-		Overall Flow:
-			Call Hooked Function
-			Jmp To Long Jmp
-			Long Jmp To Trampoline
-			Push Gate Pointer Onto stack
-			execute payload
-				JUST BEFORE CALLING GATE -> call a function that pops off stack, writes to gate pointer
-					
-	
-	*/
-	uint8_t* trampolineIter = (uint8_t*)hook->trampolineMem;
-
-	uint64_t gateFuncAddress = (uint64_t)(trampolineIter) + 100;
-
-	trampolineIter += WriteSaveArgumentRegisters(trampolineIter);	
+	trampolineIter += WriteSaveArgumentRegisters(trampolineIter);
 	trampolineIter += WriteMovToRCX(trampolineIter, gateFuncAddress);
 	trampolineIter += WriteSubRSP32(trampolineIter); //allocate home space for function call
 	trampolineIter += WriteAbsoluteCall64(trampolineIter, &PushAddress);
 	trampolineIter += WriteAddRSP32(trampolineIter);
 	trampolineIter += WriteRestoreArgumentRegisters(trampolineIter);
-	trampolineIter += WriteAbsoluteJump64(trampolineIter, hook->payloadFunc);
+	trampolineIter += WriteAbsoluteJump64(trampolineIter, hook.payloadFunc);
 	memcpy(trampolineIter, functionGateBytes, functionGateSize);
 
 	//finally, write the jumps needed to get to the trampoline from the origin function
-	WriteAbsoluteJump64(hook->longJumpMem, hook->trampolineMem);
-	WriteRelativeJump(hook->originalFunc, hook->longJumpMem, hook->stolenInstructionSize - 5);
+	WriteAbsoluteJump64(hook.longJumpMem, hook.trampolineMem);
+	WriteRelativeJump(hook.originalFunc, hook.longJumpMem, hook.stolenInstructionSize - 5);
 	SetOtherThreadsSuspended(false);
-
 }
 
-#define GET_FUNC_POINTER(x) char** ptrptr = (char**)(x); \
+/**************************
+ * PAYLOAD CODE           *
+ **************************/
 
-template<typename FuncSig> 
-inline void* GetFuncPointer(FuncSig func)
+int getNumPayload()
 {
-	char** ptrptr = (char**)(&func);
-	return (void*)(*ptrptr);
+	//this payload is used with the demo program "trampoline-imported-func-with-dll-injection
+	//and is meant to be injected into the target app "target-with-functions-from-dll"
+	//this payload hooks the "getNum" function found in the "getnum-dll" project
+	printf("Trampoline Executed\n");
+
+	int(*target)() = nullptr;
+	PopAddress(uint64_t(&target));
+	return target();
 }
 
-//have the hook code do the following: 
-// -> jump from target to longjmp function
-// -> jump from longjmp to trampoline
-//	-> copy 
-
-void DogMain()
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD ul_reason_for_call, LPVOID lpvReserved)
 {
-	while (1)
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
 	{
-		Dog snoopy("snoopy");
-		Dog dogbert("dogbert");
-		snoopy.Bark();
-		dogbert.RollOver(5);
-		dogbert.Bark();
-		snoopy.Sit();
-	}
-}
+		HMODULE mod = FindModuleInProcess(GetCurrentProcess(), DLL_NAME);
 
-int main()
-{
-	Dog snoopy("snoopy");
-	Dog dogbert("dogbert");
-
-	printf("Before Hook Installed:\n");
-	snoopy.Bark();
-	dogbert.RollOver(5);
-	dogbert.Bark();
-	snoopy.Sit();
-	printf("\nNote that we can't tell which dog did what. So let's install a hook to output the dog name before each action.\n\n");
-
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)()>(&Dog::Bark);
-		hook.payloadFunc = DogActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*)>(&hook);
+		void* localHookFunc = GetProcAddress(mod, FUNC2HOOK_NAME);
+		InstallHook(localHookFunc,getNumPayload);
 	}
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)()>(&Dog::Sit); 
-		hook.payloadFunc = DogActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*)>(&hook);
-	}
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)(int)>(&Dog::RollOver); 
-		hook.payloadFunc = DogCountedActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*, int)>(&hook);
-	}
-
-	printf("After Hook Installed: \n");
-	snoopy.Bark();
-	dogbert.RollOver(5);
-	dogbert.Bark();
-	snoopy.Sit();
-	
-	return 0;
+	return true;
 }
