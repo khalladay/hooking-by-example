@@ -3,5 +3,5 @@
 
 extern "C"
 {
-	DllExport int getNum();
+	DllExport __declspec(noinline) int getNum();
 }

@@ -457,8 +457,8 @@ uint32_t WriteAbsoluteCall64(uint8_t* dst, void* funcToCall)
 
 	uint8_t callAsmBytes[] =
 	{
-		0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
-		0xFF, 0xD0, //call rax
+		0x48, 0xBA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rdx
+		0xFF, 0xD2, //call rdx
 	};
 	memcpy(&callAsmBytes[2], &funcToCall, sizeof(void*));
 	memcpy(dst, &callAsmBytes, sizeof(callAsmBytes));
@@ -472,8 +472,8 @@ uint32_t WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
 
 	//this writes the absolute jump instructions into the memory allocated near the target
 	//the E9 jump installed in the target function (GetNum) will jump to here
-	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
-											0xFF, 0xE0 }; //jmp rax
+	uint8_t absJumpInstructions[] = { 0x48, 0xBA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rdx
+											0xFF, 0xE2 }; //jmp rdx
 
 	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
 	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
@@ -491,8 +491,8 @@ uint32_t WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJu
 
 	//this writes the absolute jump instructions into the memory allocated near the target
 	//the E9 jump installed in the target function (GetNum) will jump to here
-	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
-											0xFF, 0xE0 }; //jmp rax
+	uint8_t absJumpInstructions[] = { 0x48, 0xBA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rdx
+											0xFF, 0xE2 }; //jmp rdx
 
 	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
 	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));

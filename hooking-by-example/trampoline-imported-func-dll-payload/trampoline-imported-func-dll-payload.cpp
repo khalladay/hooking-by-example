@@ -32,7 +32,8 @@ void PushAddress(uint64_t addr) //push the address of the jump target
 	hookJumpAddresses.push(addr);
 }
 
-void PopAddress(uint64_t gatePointer)
+//we absolutely don't wnat this inlined
+__declspec(noinline) void PopAddress(uint64_t gatePointer)
 {
 	uint64_t addr = hookJumpAddresses.top();
 	hookJumpAddresses.pop();
@@ -201,6 +202,7 @@ void InstallHook(void* targetFunc, void* payloadFunc)
  * PAYLOAD CODE           *
  **************************/
 
+int(*target)();// = nullptr;
 int getNumPayload()
 {
 	//this payload is used with the demo program "trampoline-imported-func-with-dll-injection
@@ -208,7 +210,6 @@ int getNumPayload()
 	//this payload hooks the "getNum" function found in the "getnum-dll" project
 	printf("Trampoline Executed\n");
 
-	int(*target)() = nullptr;
 	PopAddress(uint64_t(&target));
 	return target();
 }

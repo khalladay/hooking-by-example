@@ -83,7 +83,7 @@
     <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <LinkIncremental>true</LinkIncremental>
+    <LinkIncremental>false</LinkIncremental>
     <IncludePath>..\..\extermal\include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\external\;$(LibraryPath)</LibraryPath>
     <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
