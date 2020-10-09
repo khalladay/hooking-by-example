@@ -101,12 +101,12 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 		if (isRelJump)
 		{
 			jumps.push_back({ i,numStolenBytes });
-			numTotalBytes += 12; //size of absolute jump in jump table
+			numTotalBytes += 13; //size of absolute jump in jump table
 		}
 		else if (inst.id == X86_INS_CALL)
 		{
 			calls.push_back({ i, numStolenBytes });
-			numTotalBytes += 14; //sizeof an absoluate call in the call table + a 2 byte jump to the end of the gate bytes
+			numTotalBytes += 15; //sizeof an absoluate call in the call table + a 2 byte jump to the end of the gate bytes
 		}
 
 		numStolenBytes += inst.size;
@@ -118,7 +118,7 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	//immediately after the stolen bytes (but BEFORE the jump/call tables), we need to add an
 	//absolute jump back to the origin function
 	hook->stolenInstructionSize = numStolenBytes;
-	numTotalBytes += 12;
+	numTotalBytes += 13;
 	WriteAbsoluteJump64(&outBuffer[numStolenBytes], (uint8_t*)hook->originalFunc + numStolenBytes);
 
 	//now we need to construct the call and jump tables, and rewrite any jmp/call instructions
@@ -134,7 +134,7 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	//add these absolute jumps/calls after the function gate, and convert the jumps/calls in the gate
 	//logic to jumps to the appropriate place in this appended list of instructions. 
 
-	uint32_t jumpTablePos = numStolenBytes + 12;
+	uint32_t jumpTablePos = numStolenBytes + 13;
 	for (auto jmp : jumps)
 	{
 		cs_insn& instr = disassembledInstructions[jmp.first];
@@ -155,7 +155,7 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 		uint64_t targetAddr = _strtoui64(jmpTargetAddr, NULL, 0);
 		WriteAbsoluteJump64(&outBuffer[jumpTablePos], (void*)targetAddr);
 		
-		jumpTablePos += 12;
+		jumpTablePos += 13;
 	}
 
 	for (auto call : calls)
@@ -177,7 +177,7 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 		jmpBytes[1] = (numStolenBytes) - (jumpTablePos + 14);
 		memcpy(&outBuffer[jumpTablePos+callSize], jmpBytes, sizeof(jmpBytes));
 
-		jumpTablePos += 14;
+		jumpTablePos += 15;
 	}
 
 	uint32_t writePos = 0;

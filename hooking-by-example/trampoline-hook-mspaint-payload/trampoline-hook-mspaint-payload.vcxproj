@@ -21,8 +21,8 @@
   <PropertyGroup Label="Globals">
     <VCProjectVersion>16.0</VCProjectVersion>
     <Keyword>Win32Proj</Keyword>
-    <ProjectGuid>{00f1bd41-0ab0-4369-87c1-40696bcb9ebb}</ProjectGuid>
-    <RootNamespace>trampolineimportedfuncdllpayload</RootNamespace>
+    <ProjectGuid>{34bea952-b2d7-4206-ba79-895f445cd34e}</ProjectGuid>
+    <RootNamespace>trampolinehookmspaintpayload</RootNamespace>
     <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
@@ -90,9 +90,9 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
     <IncludePath>..\..\extermal\include\;$(VC_IncludePath);$(WindowsSDK_IncludePath);</IncludePath>
     <LibraryPath>..\..\external\;$(LibraryPath)</LibraryPath>
-    <OutDir>$(SolutionDir)..\build\$(Platform)$(Configuration)\</OutDir>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -159,10 +159,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="trampoline-imported-func-dll-payload.cpp" />
+    <ClCompile Include="trampoline-hook-mspaint-payload.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="trampoline-imported-func-dll-payload.h" />
+    <ClInclude Include="trampoline-hook-mspaint-payload.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

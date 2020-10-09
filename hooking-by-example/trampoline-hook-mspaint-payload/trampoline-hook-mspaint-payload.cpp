@@ -1,73 +1,23 @@
-#include <windows.h>
-#include <stdio.h>
-#include <stdint.h>
-#include <functional>
-#include <string>
-#include <thread>
+#include "trampoline-hook-mspaint-payload.h"
+#include <Windows.h>
+#include <Gdiplus.h>
+#include <gdiplusflat.h>
+#pragma comment (lib, "Gdi32.lib")
+#pragma comment (lib, "Gdiplus.lib")
+
+#include <stack>
+#include <vector>
 #include "capstone/x86.h"
 #include "../hooking_common.h"
 #include "capstone/capstone.h"
-#include <vector>
-#include <tlhelp32.h>
-#include <functional>
-#include <stack>
-#include <map>
-#include <thread>
 
-class Dog
-{
-public:
-	Dog(std::string inName) :
-		name(inName)
-	{
-	}
+#define TARGET_APP_NAME "mspaint.exe"
+#define DLL_NAME "gdi32.dll"
+#define FUNC2HOOK_NAME "CreateBrushIndirect"
 
-	_declspec(noinline) void Bark() { printf("Barked\n"); }
-	_declspec(noinline) void RollOver(int x) { printf("Rolled Over %i times\n", x); }
-	_declspec(noinline) void Sit() { printf("Sat Down\n"); }
-
-public:
-	std::string name;
-};
-
-//thread local assembly is gnarly, so let's let the compiler handle it, we'll just call these funcs
-thread_local std::stack<uint64_t> hookJumpAddresses;
-
-void PushAddress(uint64_t addr) //push the address of the jump target
-{
-	hookJumpAddresses.push(addr);
-}
-
-void PopAddress(uint64_t gatePointer)
-{
-	uint64_t addr = hookJumpAddresses.top();
-	hookJumpAddresses.pop();
-	memcpy((void*)gatePointer, &addr, sizeof(uint64_t));
-}
-
-//So here's the deal - we can't just insert a function call before the call to the payload to set a thread_local pointer back to the target function, 
-//because payloads can call other hooked functions. We probably want to have a thread_local stack of function pointers, and have
-//the gate function pop the top of the stack and use that as the actual address to jump back to
-
-thread_local void (*dogActionGate)(Dog*);
-void DogActionPayload(Dog* thisPtr)
-{
-	printf("%s: ", thisPtr->name.c_str());
-
-	PopAddress(uint64_t(&dogActionGate));
-	dogActionGate(thisPtr);
-}
-
-thread_local void (*dogCountActionGate)(Dog*, int);
-void DogCountedActionPayload(Dog* thisPtr, int count)
-{
-	printf("%s: ", thisPtr->name.c_str());
-
-	PopAddress(uint64_t(&dogCountActionGate));
-	dogCountActionGate(thisPtr, count);
-}
-
-
+/**************************
+ * HOOKING CODE           *
+ **************************/
 struct HookDesc
 {
 	void* originalFunc;
@@ -77,6 +27,21 @@ struct HookDesc
 
 	uint8_t stolenInstructionSize;
 };
+
+thread_local std::stack<uint64_t> hookJumpAddresses;
+
+void PushAddress(uint64_t addr) //push the address of the jump target
+{
+	hookJumpAddresses.push(addr);
+}
+
+//we absolutely don't wnat this inlined
+__declspec(noinline) void PopAddress(uint64_t gatePointer)
+{
+	uint64_t addr = hookJumpAddresses.top();
+	hookJumpAddresses.pop();
+	memcpy((void*)gatePointer, &addr, sizeof(uint64_t));
+}
 
 uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBufferSize)
 {
@@ -100,7 +65,7 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	for (int i = 0; i < count; ++i)
 	{
 		cs_insn inst = disassembledInstructions[i];
-
+		
 		//all condition jumps are relative, as are all E9 jmps. non-E9 "jmp" is absolute, so no need to deal with it
 		bool isRelJump = inst.id >= X86_INS_JAE &&
 			inst.id <= X86_INS_JS &&
@@ -200,124 +165,108 @@ uint32_t BuildFunctionGate(HookDesc* hook, uint8_t* outBuffer, uint32_t outBuffe
 	return numTotalBytes;
 }
 
-
-template<typename FunctionSignature>
-void InstallHook(HookDesc* hook)
+void InstallHook(void* targetFunc, void* payloadFunc)
 {
+	HookDesc hook = { 0 };
+	hook.originalFunc = targetFunc;
+	hook.payloadFunc = payloadFunc;
+	hook.trampolineMem = AllocPage();
+	hook.longJumpMem = AllocatePageNearAddress(targetFunc);
+
+
 	SetOtherThreadsSuspended(true);
 
 	DWORD oldProtect;
-	check(VirtualProtect(hook->originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
+	check(VirtualProtect(hook.originalFunc, 1024, PAGE_EXECUTE_READWRITE, &oldProtect));
 
 	uint8_t functionGateBytes[1024];
-	uint32_t functionGateSize = BuildFunctionGate(hook, functionGateBytes, 1024);
+	uint32_t functionGateSize = BuildFunctionGate(&hook, functionGateBytes, 1024);
 
-	//first, let's write out the trampoline, which consists of:
-	// 1. Pushing the address of the desired gate function onto the thread_local stack
-	// 2. a jump to the hook payload
-	// 3. a call to essentially a gate switchboard, which jumps to the gate at the address on the top of the thread_local stack
+	uint8_t* trampolineIter = (uint8_t*)hook.trampolineMem;
 
+	uint64_t gateFuncAddress = (uint64_t)(trampolineIter)+102;
 
-	/*
-		Overall Flow:
-			Call Hooked Function
-			Jmp To Long Jmp
-			Long Jmp To Trampoline
-			Push Gate Pointer Onto stack
-			execute payload
-				JUST BEFORE CALLING GATE -> call a function that pops off stack, writes to gate pointer
-					
-	
-	*/
-	uint8_t* trampolineIter = (uint8_t*)hook->trampolineMem;
-
-	uint64_t gateFuncAddress = (uint64_t)(trampolineIter) + 102;
-
-	trampolineIter += WriteSaveArgumentRegisters(trampolineIter);	
+	trampolineIter += WriteSaveArgumentRegisters(trampolineIter);
 	trampolineIter += WriteMovToRCX(trampolineIter, gateFuncAddress);
 	trampolineIter += WriteSubRSP32(trampolineIter); //allocate home space for function call
 	trampolineIter += WriteAbsoluteCall64(trampolineIter, &PushAddress);
 	trampolineIter += WriteAddRSP32(trampolineIter);
 	trampolineIter += WriteRestoreArgumentRegisters(trampolineIter);
-	trampolineIter += WriteAbsoluteJump64(trampolineIter, hook->payloadFunc);
+	trampolineIter += WriteAbsoluteJump64(trampolineIter, hook.payloadFunc);
 	memcpy(trampolineIter, functionGateBytes, functionGateSize);
 
 	//finally, write the jumps needed to get to the trampoline from the origin function
-	WriteAbsoluteJump64(hook->longJumpMem, hook->trampolineMem);
-	WriteRelativeJump(hook->originalFunc, hook->longJumpMem, hook->stolenInstructionSize - 5);
+	WriteAbsoluteJump64(hook.longJumpMem, hook.trampolineMem);
+	WriteRelativeJump(hook.originalFunc, hook.longJumpMem, hook.stolenInstructionSize - 5);
 	SetOtherThreadsSuspended(false);
-
 }
 
-#define GET_FUNC_POINTER(x) char** ptrptr = (char**)(x); \
+/**************************
+ * PAYLOAD CODE           *
+ **************************/
 
-template<typename FuncSig> 
-inline void* GetFuncPointer(FuncSig func)
+HBRUSH(*createBrushIndirectPointer)(const LOGBRUSH* brush);
+HBRUSH CreateBrushIndirectPayload(const LOGBRUSH* brush)
 {
-	char** ptrptr = (char**)(&func);
-	return (void*)(*ptrptr);
+	LOGBRUSH* rwBrush = const_cast<LOGBRUSH*>(brush);
+	rwBrush->lbStyle = BS_SOLID;
+	rwBrush->lbColor = RGB(255, 0, 0);
+	PopAddress(uint64_t(&createBrushIndirectPointer));
+	return createBrushIndirectPointer(rwBrush);
 }
 
-//have the hook code do the following: 
-// -> jump from target to longjmp function
-// -> jump from longjmp to trampoline
-//	-> copy 
-
-void DogMain()
+thread_local COLORREF(*getDCBrushColorPointer)(HDC hdc);
+COLORREF GetDCBrushColorPayload(HDC hdc)
 {
-	while (1)
-	{
-		Dog snoopy("snoopy");
-		Dog dogbert("dogbert");
-		snoopy.Bark();
-		dogbert.RollOver(5);
-		dogbert.Bark();
-		snoopy.Sit();
-	}
+	PopAddress(uint64_t(&getDCBrushColorPointer));
+	return RGB(255, 0, 0);
 }
 
-int main()
+//hooking this turns all the color selector boxes in the top solid red...not quite what I wanted
+thread_local HBRUSH(*createSolidBrushPointer)(COLORREF color);
+HBRUSH createSolidBrushPayload(COLORREF color)
 {
-	Dog snoopy("snoopy");
-	Dog dogbert("dogbert");
-
-	printf("Before Hook Installed:\n");
-	snoopy.Bark();
-	dogbert.RollOver(5);
-	dogbert.Bark();
-	snoopy.Sit();
-	printf("\nNote that we can't tell which dog did what. So let's install a hook to output the dog name before each action.\n\n");
-
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)()>(&Dog::Bark);
-		hook.payloadFunc = DogActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*)>(&hook);
-	}
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)()>(&Dog::Sit); 
-		hook.payloadFunc = DogActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*)>(&hook);
-	}
-	{
-		HookDesc hook = { 0 };
-		hook.originalFunc = GetFuncPointer< void(Dog::*)(int)>(&Dog::RollOver); 
-		hook.payloadFunc = DogCountedActionPayload;
-		hook.longJumpMem = AllocatePageNearAddress(hook.originalFunc);
-		hook.trampolineMem = AllocPage();
-		InstallHook<void(*)(Dog*, int)>(&hook);
-	}
-
-	printf("After Hook Installed: \n");
-	snoopy.Bark();
-	dogbert.RollOver(5);
-	dogbert.Bark();
-	snoopy.Sit();
-	
-	return 0;
+	PopAddress(uint64_t(&createSolidBrushPointer));
+	return createSolidBrushPointer(RGB(255, 0, 0));
 }
+
+thread_local Gdiplus::GpStatus(*GdipCreateSolidFillPointer)(Gdiplus::ARGB, Gdiplus::GpSolidFill**);
+Gdiplus::GpStatus GdipCreateSolidFillPayload(Gdiplus::ARGB color, Gdiplus::GpSolidFill** brush)
+{
+	Gdiplus::ARGB red = 0xffff << RED_SHIFT;
+	PopAddress(uint64_t(&GdipCreateSolidFillPointer));
+	return GdipCreateSolidFillPointer(red, brush);
+}
+
+thread_local Gdiplus::GpStatus(*GdipSetSolidFillColorPointer)(Gdiplus::GpSolidFill* brush, Gdiplus::ARGB color);
+Gdiplus::GpStatus GdipSetSolidFillColorPayload(Gdiplus::GpSolidFill* brush, Gdiplus::ARGB color)
+{
+	Gdiplus::ARGB red = 0xffff << RED_SHIFT;
+	PopAddress(uint64_t(&GdipSetSolidFillColorPointer));
+	return GdipSetSolidFillColorPointer(brush, red);
+}
+BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD ul_reason_for_call, LPVOID lpvReserved)
+{
+	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
+	{
+		HMODULE mod = FindModuleInProcess(GetCurrentProcess(), DLL_NAME);
+
+		void* localHookFunc = GetProcAddress(mod, FUNC2HOOK_NAME);
+		//InstallHook(localHookFunc, CreateBrushIndirectPayload);
+		
+		void* localHookFunc2 = GetProcAddress(mod, TEXT("GetDCBrushColor"));
+	//	InstallHook(localHookFunc2, GetDCBrushColorPayload);
+
+	//	void* localHookFunc3 = GetProcAddress(mod, TEXT("CreateSolidBrush"));
+	//	InstallHook(localHookFunc3, createSolidBrushPayload);
+
+		HMODULE gdiPlusModule = FindModuleInProcess(GetCurrentProcess(), ("gdiplus.dll"));
+		void* localHookFunc4 = GetProcAddress(gdiPlusModule, ("GdipSetSolidFillColor"));
+		InstallHook(localHookFunc4, GdipSetSolidFillColorPayload);
+
+		void* localHookFunc5 = GetProcAddress(gdiPlusModule, ("GdipCreateSolidFill"));
+	//	InstallHook(localHookFunc5, GdipCreateSolidFillPayload);
+	}
+	return true;
+}
+
