@@ -136,12 +136,12 @@ void* AllocatePageNearAddress(void* targetAddr)
 {
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
+	const addr_t PAGE_SIZE = sysInfo.dwPageSize;
 
-	addr_t startAddr = (addr_t)targetAddr;
+	uint64_t startAddr = (uint64_t(targetAddr) & ~(PAGE_SIZE - 1)); //round down to nearest page boundary
 	addr_t minAddr = min(startAddr - 0x7FFFFF00, (addr_t)sysInfo.lpMinimumApplicationAddress);
 	addr_t maxAddr = max(startAddr + 0x7FFFFF00, (addr_t)sysInfo.lpMaximumApplicationAddress);
 
-	const addr_t PAGE_SIZE = sysInfo.dwPageSize;
 	addr_t startPage = (startAddr - (startAddr % PAGE_SIZE));
 
 	addr_t pageOffset = 1;
@@ -479,10 +479,6 @@ uint32_t WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
 
 	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
 	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
-	DWORD oldProtect = 0;
-	bool err = VirtualProtect(absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
-
 	memcpy(absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
 	return sizeof(absJumpInstructions);
 }

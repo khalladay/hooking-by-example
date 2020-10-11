@@ -11,7 +11,8 @@
 #define check(expr) if (!(expr)){ DebugBreak(); exit(-1); }
 
 //the target and palyoad functions in this example are so small/trivial that
-//enabling optimizations for them breaks this tiny example program
+//enabling optimizations for them breaks this tiny example program, since we need
+//at least 5 bytes of instructions
 #pragma optimize( "", off )
 int getNum()
 {
@@ -24,16 +25,16 @@ int hookPayload()
 }
 #pragma optimize( "", on )
 
-void* AllocatePageNearAddress(void* targetAddr)
+void* _AllocatePageNearAddress(void* targetAddr)
 {
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
+	const uint64_t PAGE_SIZE = sysInfo.dwPageSize;
 
-	uint64_t startAddr = (uint64_t)targetAddr;
+	uint64_t startAddr = (uint64_t(targetAddr) & ~(PAGE_SIZE - 1)); //round down to nearest page boundary
 	uint64_t minAddr = min(startAddr - 0x7FFFFF00, (uint64_t)sysInfo.lpMinimumApplicationAddress);
 	uint64_t maxAddr = max(startAddr + 0x7FFFFF00, (uint64_t)sysInfo.lpMaximumApplicationAddress);
 
-	const uint64_t PAGE_SIZE = sysInfo.dwPageSize;
 	uint64_t startPage = (startAddr - (startAddr % PAGE_SIZE));
 
 	uint64_t pageOffset = 1;
@@ -70,40 +71,45 @@ void* AllocatePageNearAddress(void* targetAddr)
 	return nullptr;
 }
 
+uint32_t _WriteAbsoluteJump64(void* absJumpMemory, void* addrToJumpTo)
+{
+	//this writes the absolute jump instructions into the memory allocated near the target
+	//the E9 jump installed in the target function (GetNum) will jump to here
+	uint8_t absJumpInstructions[] = { 0x49, 0xBA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into r10
+										0x41, 0xFF, 0xE2 }; //jmp r10
+
+	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
+	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
+	memcpy(absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
+	return sizeof(absJumpInstructions);
+}
+
 int main()
 {
 	printf("Before Hook, getNum() returns %i\n", getNum());
 
 	//since a 64 bit program can have functions located too far away to reach via a 32 bit jump,
 	//hooking in 64 bit programs is usually done as two jumps. The first jump is done via a 32
-	//bit relative jump (and is installed in the target program). This jump goes from the target
-	//program, to a chunk of memory that contains instructions for a 64 bit absolute jump to the 
+	//bit relative jump (and is installed in the target function). This jump goes from the target
+	//program, to a "relay" function, which constain instructions for a 64 bit absolute jump to the 
 	//actual payload. 
 
 	DWORD oldProtect;
 	BOOL success = VirtualProtect(getNum, 5, PAGE_EXECUTE_READWRITE, &oldProtect);
 	check(success);
 
-	void* absoluteJumpMemory = AllocatePageNearAddress(getNum);
-	check(absoluteJumpMemory);
+	void* relayFuncMemory = _AllocatePageNearAddress(getNum);
+	check(relayFuncMemory);
+	_WriteAbsoluteJump64(relayFuncMemory, hookPayload); //write relay func instructions
 
-	//this writes the absolute jump instructions into the memory allocated near the target
-	//the E9 jump installed in the target function (GetNum) will jump to here
-	uint8_t absJumpInstructions[] = { 0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into rax
-											0xFF, 0xE0 }; //jmp rax
-
-	uint64_t payloadFuncAddr = (uint64_t)hookPayload;
-	memcpy(&absJumpInstructions[2], &payloadFuncAddr, sizeof(uint64_t));
-	memcpy(absoluteJumpMemory, absJumpInstructions, sizeof(absJumpInstructions));
-
-	//finally, we install the E9 jump into GetNum
+	//now that the relay function is built, we need to install the E9 jump into the target func
 
 	//32 bit relative jump opcode is E9, takes 1 32 bit operand for jump offset
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
 
 	//to fill out the last 4 bytes of jmpInstruction, we need the offset between 
 	//the payload function and the instruction immediately AFTER the jmp instruction
-	const uint64_t relAddr = (uint64_t)absoluteJumpMemory - ((uint64_t)getNum + sizeof(jmpInstruction));
+	const uint64_t relAddr = (uint64_t)relayFuncMemory - ((uint64_t)getNum + sizeof(jmpInstruction));
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 	memcpy(getNum, jmpInstruction, sizeof(jmpInstruction));
 

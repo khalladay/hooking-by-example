@@ -15,7 +15,8 @@
 #define check(expr) if (!(expr)){ DebugBreak(); exit(-1); }
 
 //the target and palyoad functions in this example are so small/trivial that
-//enabling optimizations for them breaks this tiny example program
+//enabling optimizations for them breaks this tiny example program, since we need
+//at least 5 bytes of instructions
 #pragma optimize( "", off )
 int getNum()
 {
