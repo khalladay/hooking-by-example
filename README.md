@@ -78,7 +78,7 @@ The crown jewel of the repo. This example injects a dll payload ([14B - Trampoli
 Simple target application that calls a free function in a loop. Compiled with debug information included. 
 
 ### [B - Target With Free Function From DLL](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/B%20-%20Target%20With%20Free%20Function%20From%20DLL/target-with-free-function-from-dll.cpp)
-Target application that calls a free function that has been imported from a dll ([B2 - GetNum-DLL]()) in a loop. 
+Target application that calls a free function that has been imported from a dll ([B2 - GetNum-DLL](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/B2%20-%20GetNum-DLL/GetNum-DLL.cpp)) in a loop. 
 
 ### [C - Target With Non-Virtual Member Functions](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/C%20-%20Target%20With%20Non-Virtual%20Member%20Functions/target-with-member-function.cpp)
 Target application that calls a non virtual member function in a loop.
