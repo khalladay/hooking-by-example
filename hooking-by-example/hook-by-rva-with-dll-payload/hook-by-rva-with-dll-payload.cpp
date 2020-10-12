@@ -93,41 +93,28 @@ int main(int argc, const char** argv)
 
 	DWORD processID = FindPidByName(TARGET_APP_NAME);
 	check(processID);
-
 	HANDLE remoteProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processID);
 	check(remoteProcessHandle);
-
 	HMODULE base = GetBaseModuleForProcess(remoteProcessHandle);
 	check(base);
+
 	void* func2hook = (void*)((addr_t)base + (addr_t)inputRVA);
 
+	//now that we have the address of the target function, we'll inject the payload
+	//and write the relay function
 	char fullPath[1024];
 	GetPathToPayloadDLL(fullPath);
 	HMODULE mod = FindModuleBaseAddress(remoteProcessHandle, fullPath);
-
 	InjectPayload(remoteProcessHandle, fullPath);
 
 	void* payloadAddrInRemoteProcess = FindAddressOfRemoteDLLFunction(remoteProcessHandle, fullPath, PAYLOAD_FUNC_NAME);
 	check(payloadAddrInRemoteProcess);
 
-	void* hookJumpTarget = payloadAddrInRemoteProcess;
+	void* relayFunc = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
+	check(relayFunc != nullptr);
+	WriteAbsoluteJump64(remoteProcessHandle, relayFunc, payloadAddrInRemoteProcess);
 
-	//it's possible for functions to be located farther than a 32 bit jump away from one
-	//another in a 64 bit program, (but there's no 64 bit relative jump instruction), so
-	//if the victim process is 64 bit, we need to write an absolute jump instruction somewhere
-	//close to func2hook. The E9 jump that gets installed in func2hook will jump to these
-	//instructions, which will then do a 64 bit absolute jump to the payload.
-	if (IsProcess64Bit(remoteProcessHandle))
-	{
-		void* absoluteJumpMemory = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
-		check(absoluteJumpMemory != nullptr);
-		WriteAbsoluteJump64(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
-		hookJumpTarget = absoluteJumpMemory;
-	}
-
-	//finally, write the actual "hook" into the target function. On 32 bit
-	//this will jump directly to the payload, on 64 bit, it jumps to the 
-	//absolute jump that we made above, which jumps to the payload
-	WriteRelativeJump(remoteProcessHandle, func2hook, hookJumpTarget);
+	//finally, write the actual "hook" into the target function. 
+	WriteRelativeJump(remoteProcessHandle, func2hook, relayFunc);
 	return 0;
 }

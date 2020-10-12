@@ -44,47 +44,85 @@ void GetPathToDLL(char* outPath, size_t outPathSize)
 }
 
 
+HMODULE _FindModuleBaseAddress(HANDLE process, const char* targetModule)
+{
+	HMODULE hMods[1024];
+	DWORD cbNeeded;
+
+	if (EnumProcessModules(process, hMods, sizeof(hMods), &cbNeeded))
+	{
+		for (uint32_t i = 0; i < (cbNeeded / sizeof(HMODULE)); i++)
+		{
+			TCHAR moduleName[MAX_PATH];
+
+			// Get the full path to the module's file.
+
+			if (GetModuleFileNameEx(process, hMods[i], moduleName,
+				sizeof(moduleName) / sizeof(TCHAR)))
+			{
+				// Print the module name and handle value.
+				if (strstr(moduleName, targetModule) != nullptr)
+				{
+					return hMods[i];
+				}
+			}
+		}
+	}
+
+	return NULL;
+}
+
+void* _FindAddressOfRemoteDLLFunction(HANDLE process, const char* dllName, const char* funcName)
+{
+	//first, load the dll into this process so we can use GetProcAddress to determine the offset
+	//of the target function from the DLL base address
+	HMODULE localDLL = LoadLibraryEx(dllName, NULL, 0);
+	check(localDLL);
+	void* localHookFunc = GetProcAddress(localDLL, funcName);
+	check(localHookFunc);
+
+	uint64_t offsetOfHookFunc = (uint64_t)localHookFunc - (uint64_t)localDLL;
+	FreeLibrary(localDLL); //free the library, we don't need it anymore.
+
+	//Technically, we could just use the result of GetProcAddress, since in 99% of cases, the base address of the dll
+	//in the two processes will be shared thanks to ASLR, but just in case the remote process has relocated the dll, 
+	//I'm getting it here separately.
+
+	HMODULE remoteModuleBase = _FindModuleBaseAddress(process, dllName);
+
+	return (void*)((uint64_t)remoteModuleBase + offsetOfHookFunc);
+}
+
+
 int main(int argc, const char** argv)
 {
 	bool err;
 
+	//first, find the remote process and the function we want to hook
 	DWORD processID = FindPidByName(TARGET_APP_NAME);
 	check(processID);
 
 	HANDLE remoteProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processID);
 	check(remoteProcessHandle);
 
-	HMODULE base = GetBaseModuleForProcess(remoteProcessHandle);
-	check(base);
-
 	char dllPath[1024];
 	GetPathToDLL(dllPath, 1024);
 
-	void* func2hook = FindAddressOfRemoteDLLFunction(remoteProcessHandle, dllPath, FUNC2HOOK_NAME);
+	void* func2hook = _FindAddressOfRemoteDLLFunction(remoteProcessHandle, dllPath, FUNC2HOOK_NAME);
+	check(func2hook);
 
+	//now write the payload and relay functions into the remote process' address space
 	void* payloadAddrInRemoteProcess = AllocPageInTargetProcess(remoteProcessHandle);
 	check(payloadAddrInRemoteProcess);
 	err = WriteProcessMemory(remoteProcessHandle, payloadAddrInRemoteProcess, hookPayload, sizeof(hookPayload), nullptr);
 	check(err);
 
-	void* hookJumpTarget = payloadAddrInRemoteProcess;
+	void* relayFunc = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
+	check(relayFunc != nullptr);
+	WriteAbsoluteJump64(remoteProcessHandle, relayFunc, payloadAddrInRemoteProcess);
 
-	//it's possible for functions to be located farther than a 32 bit jump away from one
-	//another in a 64 bit program, (but there's no 64 bit relative jump instruction), so
-	//if the victim process is 64 bit, we need to write an absolute jump instruction somewhere
-	//close to func2hook. The E9 jump that gets installed in func2hook will jump to these
-	//instructions, which will then do a 64 bit absolute jump to the payload.
-	if (IsProcess64Bit(remoteProcessHandle))
-	{
-		void* absoluteJumpMemory = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
-		check(absoluteJumpMemory != nullptr);
-		WriteAbsoluteJump64(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
-		hookJumpTarget = absoluteJumpMemory;
-	}
+	//finally, write the actual "hook" into the target function.
+	WriteRelativeJump(remoteProcessHandle, func2hook, relayFunc);
 
-	//finally, write the actual "hook" into the target function. On 32 bit
-	//this will jump directly to the payload, on 64 bit, it jumps to the 
-	//absolute jump that we made above, which jumps to the payload
-	WriteRelativeJump(remoteProcessHandle, func2hook, hookJumpTarget);
 	return 0;
 }

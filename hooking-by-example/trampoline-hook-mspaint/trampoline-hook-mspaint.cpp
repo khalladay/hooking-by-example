@@ -69,8 +69,6 @@ void GetPathToPayloadDLL(char* outBuff)
 
 int main(int argc, const char** argv)
 {
-	//5	check(argc == 2);
-
 	DWORD processID = FindPidByName(TARGET_APP_NAME);
 	check(processID);
 
@@ -79,8 +77,6 @@ int main(int argc, const char** argv)
 
 	char fullPath[1024];
 	GetPathToPayloadDLL(fullPath);
-	HMODULE mod = FindModuleBaseAddress(remoteProcessHandle, fullPath);
-
 	InjectPayload(remoteProcessHandle, fullPath);
 
 	return 0;

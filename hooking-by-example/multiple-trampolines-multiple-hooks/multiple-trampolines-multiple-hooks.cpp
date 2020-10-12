@@ -211,23 +211,14 @@ void InstallHook(HookDesc* hook)
 
 	uint8_t functionGateBytes[1024];
 	uint32_t functionGateSize = BuildFunctionGate(hook, functionGateBytes, 1024);
-
-	//first, let's write out the trampoline, which consists of:
-	// 1. Pushing the address of the desired gate function onto the thread_local stack
-	// 2. a jump to the hook payload
-	// 3. a call to essentially a gate switchboard, which jumps to the gate at the address on the top of the thread_local stack
-
-
 	/*
 		Overall Flow:
 			Call Hooked Function
-			Jmp To Long Jmp
-			Long Jmp To Trampoline
+			Jmp To relay func
+			Long Jmp To "pre-payload code"
 			Push Gate Pointer Onto stack
 			execute payload
-				JUST BEFORE CALLING GATE -> call a function that pops off stack, writes to gate pointer
-					
-	
+				JUST BEFORE CALLING Trampoline -> call a function that pops off stack, writes to trampoline pointer
 	*/
 	uint8_t* trampolineIter = (uint8_t*)hook->trampolineMem;
 
@@ -249,19 +240,13 @@ void InstallHook(HookDesc* hook)
 
 }
 
-#define GET_FUNC_POINTER(x) char** ptrptr = (char**)(x); \
-
+//almost certainly specific to MSVC
 template<typename FuncSig> 
 inline void* GetFuncPointer(FuncSig func)
 {
 	char** ptrptr = (char**)(&func);
 	return (void*)(*ptrptr);
 }
-
-//have the hook code do the following: 
-// -> jump from target to longjmp function
-// -> jump from longjmp to trampoline
-//	-> copy 
 
 void DogMain()
 {

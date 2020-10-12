@@ -38,49 +38,27 @@ __declspec(noinline) void PrintColorName(Color* color)
 }
 #pragma optimize("", on)
 
-
-/* the plan is: 
-	PrintColorName -> overwrite first 5 bytes with jmp to redirector
-		Trampoline (not a function, just instructions)
-			-> Call HookPayload
-			-> Execute stolen bytes
-			-> jump back to PrintColorName + 5
-*/
+void(*PrintColorNameTrampoline)(Color*);
 __declspec(noinline) void HookPayload(Color* color)
 {
 	color->r = 1.0f;
 	color->g = 0.0f;
 	color->b = 1.0f;
+	PrintColorNameTrampoline(color);
 }
 
-void WriteTrampoline(void* dst, void* payloadFuncAddr, void* hookedFunc, uint8_t* stolenBytes, uint32_t numStolenBytes)
+void WriteTrampoline(void* dst, void* payloadFuncAddr, void* func2hook, uint8_t* stolenBytes, uint32_t numStolenBytes)
 {
-	uint8_t callBytes[] = { 0x51, //push rcx
-							0x48, 0x83, 0xEC, 0x20, // sub rsp, 20h (shadow memory)
-							0x48, 0xB8, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //movabs 64 bit value into rax
-							0xFF, 0xD0, //call rax
-							0x48, 0x83, 0xC4, 0x20, //add rsp, 20h
-							0x59 //pop rcx
-	};
-							
-	uint8_t jumpBytes[] = { 0xE9, 0x00, 0x00, 0x00, 0x00 }; //jmp 
 
-	memcpy(&callBytes[7], &payloadFuncAddr, sizeof(void*));
+	//the trampoline consists of the stolen bytes from the target function, following by a jump back
+	//to the target function + 5 bytes, in order to continue the execution of that function. This continues like
+	//a normal function call
+	void* trampolineJumpTarget = ((uint8_t*)func2hook + 5);
 
-	//actually write the trampoline
-	uint8_t* funcPtr = (uint8_t*)dst;
-	memcpy(funcPtr, callBytes, sizeof(callBytes));
-	funcPtr += sizeof(callBytes);
-	memcpy(funcPtr, stolenBytes, numStolenBytes);
-	funcPtr += numStolenBytes;
-
-	int64_t relativeToJumpTarget64 = ((int64_t)hookedFunc+5) - ((int64_t)funcPtr + 5);
-	check(relativeToJumpTarget64 < INT32_MAX);
-	int32_t relativeToJumpTarget = (int32_t)relativeToJumpTarget64;
-
-	memcpy(&jumpBytes[1], &relativeToJumpTarget, 4);
-
-	memcpy(funcPtr, jumpBytes, sizeof(jumpBytes));
+	uint8_t* dstIter = (uint8_t*)dst;
+	memcpy(dstIter, stolenBytes, numStolenBytes);
+	dstIter += numStolenBytes;
+	dstIter += WriteAbsoluteJump64(dstIter, trampolineJumpTarget);
 }
 
 
@@ -97,9 +75,10 @@ int main()
 	memcpy(stolenBytes, func2hook, sizeof(stolenBytes));
 
 	void* trampolineMemory = AllocatePageNearAddress(func2hook);
+	PrintColorNameTrampoline = (void(*)(Color*))trampolineMemory;
 	WriteTrampoline(trampolineMemory, HookPayload, func2hook, stolenBytes, sizeof(stolenBytes));
 
-	WriteRelativeJump(func2hook, trampolineMemory);
+	WriteRelativeJump(func2hook, payloadFunc);
 
 	while (1)
 	{

@@ -18,29 +18,100 @@
 #include <DbgHelp.h>
 #pragma comment (lib, "Dbghelp.lib")
 
+#define TARGET_PROGRAM_NAME "target-with-free-functions.exe"
+
 const uint8_t hookPayload[] =
 {
 	0xB8, 0x64, 0x0, 0x0, 0x0, // mov eax, 64h
 	0xC3					   // ret
 };
 
+void* _AllocPageInTargetProcess(HANDLE process)
+{
+	SYSTEM_INFO sysInfo;
+	GetSystemInfo(&sysInfo);
+	int PAGE_SIZE = sysInfo.dwPageSize;
+
+	void* newPage = VirtualAllocEx(process, NULL, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
+	return newPage;
+}
+
+DWORD _FindPidByName(const char* name)
+{
+	HANDLE h;
+	PROCESSENTRY32 singleProcess;
+	h = CreateToolhelp32Snapshot( //takes a snapshot of specified processes
+		TH32CS_SNAPPROCESS, //get all processes
+		0); //ignored for SNAPPROCESS
+
+	singleProcess.dwSize = sizeof(PROCESSENTRY32);
+
+	do {
+
+		if (strcmp(singleProcess.szExeFile, name) == 0)
+		{
+			DWORD pid = singleProcess.th32ProcessID;
+			CloseHandle(h);
+			return pid;
+		}
+
+	} while (Process32Next(h, &singleProcess));
+
+	CloseHandle(h);
+
+	return 0;
+}
+
+bool _IsProcess64Bit(HANDLE process)
+{
+	BOOL isWow64 = false;
+	IsWow64Process(process, &isWow64);
+
+	if (isWow64)
+	{
+		//process is 32 bit, running on 64 bit machine
+		return false;
+	}
+	else
+	{
+		SYSTEM_INFO sysInfo;
+		GetSystemInfo(&sysInfo);
+		return sysInfo.wProcessorArchitecture == PROCESSOR_ARCHITECTURE_AMD64;
+	}
+}
+
+uint32_t _WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJumpTo)
+{
+	check(IsProcess64Bit(process));
+
+	//this writes the absolute jump instructions into the memory allocated near the target
+	//the E9 jump installed in the target function (GetNum) will jump to here
+	uint8_t absJumpInstructions[] = { 0x49, 0xBA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, //mov 64 bit value into r10
+											0x41, 0xFF, 0xE2 }; //jmp r10
+
+	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
+	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
+
+	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
+	return sizeof(absJumpInstructions);
+}
+
 int main(int argc, const char** argv)
 {
-	bool err; 
-
-	DWORD processID = FindPidByName("target-with-free-functions.exe");
+	//first we actually need to find our process
+	DWORD processID = _FindPidByName(TARGET_PROGRAM_NAME);
 	check(processID);
 
 	HANDLE remoteProcessHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, processID);
 	check(remoteProcessHandle);
 
 	//this process' pointer size needs to match the target process
-	check(IsProcess64Bit(remoteProcessHandle) == IsProcess64Bit(GetCurrentProcess));
+	check(_IsProcess64Bit(remoteProcessHandle) == _IsProcess64Bit(GetCurrentProcess));
 
-	//the target program that this program hooks (target-with-free-functions.exe)
-	//has been built with debug symbols enabled, which means we can get the address
-	//of the function to hook by looking up it's name in the symbol table
-	err = SymInitialize(remoteProcessHandle, NULL, true);
+	//the target program that this program hooks has been built with debug 
+	//symbols enabled, which means we can get the address of the func to hook
+	//by looking up its name in the symbol table
+	bool err = SymInitialize(remoteProcessHandle, NULL, true);
 	check(err);
 	SYMBOL_INFO symInfo = { 0 };
 	symInfo.SizeOfStruct = sizeof(symInfo);
@@ -50,29 +121,19 @@ int main(int argc, const char** argv)
 	void* func2hook = (void*)symInfo.Address;
 
 	//next step is to write the payload function to the victim process' memory
-	void* payloadAddrInRemoteProcess = AllocPageInTargetProcess(remoteProcessHandle);
+	//usually you'd do this will dll injection, but this example just writes out
+	//the machine code for the payload function
+	void* payloadAddrInRemoteProcess = _AllocPageInTargetProcess(remoteProcessHandle);
 	check(payloadAddrInRemoteProcess);
 	err = WriteProcessMemory(remoteProcessHandle, payloadAddrInRemoteProcess, hookPayload, sizeof(hookPayload), nullptr);
 	check(err);
 
-	void* hookJumpTarget = payloadAddrInRemoteProcess;
+	//next write the relay function
+	void* relayFunc = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
+	check(relayFunc != nullptr);
+	_WriteAbsoluteJump64(remoteProcessHandle, relayFunc, payloadAddrInRemoteProcess);
 
-	//it's possible for functions to be located farther than a 32 bit jump away from one
-	//another in a 64 bit program, (but there's no 64 bit relative jump instruction), so
-	//if the victim process is 64 bit, we need to write an absolute jump instruction somewhere
-	//close to func2hook. The E9 jump that gets installed in func2hook will jump to these
-	//instructions, which will then do a 64 bit absolute jump to the payload.
-	if (IsProcess64Bit(remoteProcessHandle))
-	{
-		void* absoluteJumpMemory = AllocatePageNearAddressRemote(remoteProcessHandle, func2hook);
-		check(absoluteJumpMemory != nullptr);
-		WriteAbsoluteJump64(remoteProcessHandle, absoluteJumpMemory, payloadAddrInRemoteProcess);
-		hookJumpTarget = absoluteJumpMemory;
-	}
-
-	//finally, write the actual "hook" into the target function. On 32 bit
-	//this will jump directly to the payload, on 64 bit, it jumps to the 
-	//absolute jump that we made above, which jumps to the payload
-	WriteRelativeJump(remoteProcessHandle, func2hook, hookJumpTarget);
+	//finally, write the actual "hook" into the target function.
+	WriteRelativeJump(remoteProcessHandle, func2hook, relayFunc);
 	return 0;
 }

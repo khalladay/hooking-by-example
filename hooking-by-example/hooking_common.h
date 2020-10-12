@@ -90,12 +90,12 @@ void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
 
 	SYSTEM_INFO sysInfo;
 	GetSystemInfo(&sysInfo);
+	const uint64_t PAGE_SIZE = sysInfo.dwPageSize;
 
-	uint64_t startAddr = (uint64_t)targetAddr;
+	uint64_t startAddr = (uint64_t(targetAddr) & ~(PAGE_SIZE - 1)); //round down to nearest page boundary
 	uint64_t minAddr = min(startAddr - 0x7FFFFF00, (uint64_t)sysInfo.lpMinimumApplicationAddress);
 	uint64_t maxAddr = max(startAddr + 0x7FFFFF00, (uint64_t)sysInfo.lpMaximumApplicationAddress);
 
-	const uint64_t PAGE_SIZE = sysInfo.dwPageSize;
 	uint64_t startPage = (startAddr - (startAddr % PAGE_SIZE));
 
 	uint64_t pageOffset = 1;
@@ -134,48 +134,7 @@ void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
 
 void* AllocatePageNearAddress(void* targetAddr)
 {
-	SYSTEM_INFO sysInfo;
-	GetSystemInfo(&sysInfo);
-	const addr_t PAGE_SIZE = sysInfo.dwPageSize;
-
-	uint64_t startAddr = (uint64_t(targetAddr) & ~(PAGE_SIZE - 1)); //round down to nearest page boundary
-	addr_t minAddr = min(startAddr - 0x7FFFFF00, (addr_t)sysInfo.lpMinimumApplicationAddress);
-	addr_t maxAddr = max(startAddr + 0x7FFFFF00, (addr_t)sysInfo.lpMaximumApplicationAddress);
-
-	addr_t startPage = (startAddr - (startAddr % PAGE_SIZE));
-
-	addr_t pageOffset = 1;
-	while (1)
-	{
-		addr_t byteOffset = pageOffset * PAGE_SIZE;
-		addr_t highAddr = startPage + byteOffset;
-		addr_t lowAddr = startPage - byteOffset;
-
-		bool needsExit = highAddr > maxAddr || lowAddr < minAddr;
-
-		if (highAddr < maxAddr)
-		{
-			void* outAddr = VirtualAlloc((void*)highAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-			if (outAddr)
-				return outAddr;
-		}
-
-		if (lowAddr > minAddr)
-		{
-			void* outAddr = VirtualAlloc((void*)lowAddr, PAGE_SIZE, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-			if (outAddr != nullptr)
-				return outAddr;
-		}
-
-		pageOffset++;
-
-		if (needsExit)
-		{
-			break;
-		}
-	}
-
-	return nullptr;
+	return AllocatePageNearAddressRemote(GetCurrentProcess(), targetAddr);
 }
 
 void LowercaseInPlace(char* str)
@@ -221,6 +180,9 @@ void RebaseVirtualDrivePath(const char* path, char* outBuff, size_t outBuffSize)
 //ie: somepath/subdir/mydll.dll can be searched for with "mydll.dll"
 HMODULE FindModuleInProcess(HANDLE process, const char* name)
 {
+	char* lowerCaseName = _strdup(name);
+	LowercaseInPlace(lowerCaseName);
+
 	HMODULE remoteProcessModules[1024];
 	DWORD numBytesWrittenInModuleArray = 0;
 	BOOL success = EnumProcessModules(process, remoteProcessModules, sizeof(HMODULE) * 1024, &numBytesWrittenInModuleArray);
@@ -251,12 +213,13 @@ HMODULE FindModuleInProcess(HANDLE process, const char* name)
 		char* dllName = lastSlash + 1;
 		LowercaseInPlace(dllName);
 
-		if (strcmp(dllName, name) == 0)
+		if (strcmp(dllName, lowerCaseName) == 0)
 		{
 			remoteProcessModule = remoteProcessModules[i];
 
 			success = GetModuleInformation(process, remoteProcessModules[i], &remoteProcessModuleInfo, sizeof(MODULEINFO));
 			check(success);
+			free(lowerCaseName);
 			return remoteProcessModule;
 		}
 		//the following string operations are to account for cases where GetModuleFileNameEx
@@ -266,6 +229,7 @@ HMODULE FindModuleInProcess(HANDLE process, const char* name)
 		check(err);
 	}
 
+	free(lowerCaseName);
 	return 0;
 		
 }
@@ -283,7 +247,6 @@ void PrintModulesForProcess(HANDLE process)
 	}
 
 	DWORD numRemoteModules = numBytesWrittenInModuleArray / sizeof(HMODULE);
-	MODULEINFO remoteProcessModuleInfo;
 	HMODULE remoteProcessModule = 0; //An HMODULE is just the DLL's base address 
 
 	for (DWORD i = 0; i < numRemoteModules; ++i)
@@ -494,9 +457,6 @@ uint32_t WriteAbsoluteJump64(HANDLE process, void* absJumpMemory, void* addrToJu
 
 	uint64_t addrToJumpTo64 = (uint64_t)addrToJumpTo;
 	memcpy(&absJumpInstructions[2], &addrToJumpTo64, sizeof(addrToJumpTo64));
-	DWORD oldProtect = 0;
-	bool err = VirtualProtectEx(process, absJumpMemory, 64, PAGE_EXECUTE_READWRITE, &oldProtect);
-	check(err);
 
 	WriteProcessMemory(process, absJumpMemory, absJumpInstructions, sizeof(absJumpInstructions), nullptr);
 	return sizeof(absJumpInstructions);
