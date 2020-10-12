@@ -1,6 +1,4 @@
 /*
-	Trampoline-embdedded-disasm-same-process
-
 	This program demonstrates how to use an disassembler (in this case, the capstone library) to
 	build trampolines for a function in a program WITHOUT having prior knowledge of the compiled
 	assembly for that function.
