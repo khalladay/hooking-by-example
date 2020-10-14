@@ -87,16 +87,17 @@ Target application that calls a non virtual member function in a loop.
 Target application that calls a virtual member function in a loop. 
 
 # References
-https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=vs-2019
-http://jbremer.org/x86-api-hooking-demystified/#ah-introduction
-https://guidedhacking.com/threads/code-detouring-hooking-guide.14185/
-https://easyhook.github.io/tutorials/nativeremotehook.html
-http://sandsprite.com/blogs/index.php?uid=7&pid=232&year=2012
-https://www.ragestorm.net/blogs/?p=107
-https://devblogs.microsoft.com/oldnewthing/20170120-00/?p=95225 
-https://security.stackexchange.com/questions/18556/how-do-aslr-and-dep-work
-https://www.blackhat.com/docs/us-16/materials/us-16-Yavo-Captain-Hook-Pirating-AVs-To-Bypass-Exploit-Mitigations.pdf
-https://www.malwaretech.com/2015/01/inline-hooking-for-programmers-part-1.html
-https://nagareshwar.securityxploded.com/2014/03/20/code-injection-and-api-hooking-techniques/
-https://blog.nettitude.com/uk/windows-inline-function-hooking
-https://www.fireeye.com/blog/threat-research/2020/03/six-facts-about-address-space-layout-randomization-on-windows.html
+
+* https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=vs-2019
+* http://jbremer.org/x86-api-hooking-demystified/#ah-introduction
+* https://guidedhacking.com/threads/code-detouring-hooking-guide.14185/
+* https://easyhook.github.io/tutorials/nativeremotehook.html
+* http://sandsprite.com/blogs/index.php?uid=7&pid=232&year=2012
+* https://www.ragestorm.net/blogs/?p=107
+* https://devblogs.microsoft.com/oldnewthing/20170120-00/?p=95225 
+* https://security.stackexchange.com/questions/18556/how-do-aslr-and-dep-work
+* https://www.blackhat.com/docs/us-16/materials/us-16-Yavo-Captain-Hook-Pirating-AVs-To-Bypass-Exploit-Mitigations.pdf
+* https://www.malwaretech.com/2015/01/inline-hooking-for-programmers-part-1.html
+* https://nagareshwar.securityxploded.com/2014/03/20/code-injection-and-api-hooking-techniques/
+* https://blog.nettitude.com/uk/windows-inline-function-hooking
+* https://www.fireeye.com/blog/threat-research/2020/03/six-facts-about-address-space-layout-randomization-on-windows.html
