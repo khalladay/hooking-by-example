@@ -16,6 +16,8 @@ Finally, the last trampoline example installs a hook in mspaint. I assume at som
 # Contents
 The examples are divided into two categories: those that use trampolines, and those that don't. The non-trampoline examples exist solely to demonstrate redirecting program flow from one function to another in different situations. Building trampolines is complicated, and when I was trying to figure out how function hooking worked, it was immensely helpful to start out by building the non-trampoline examples first. Additionally, there are 4 "target programs" which are used by examples that want to demonstrate how to install hooks in different (already running) processes. 
 
+Most of these examples leak memory related to the hooks. I don't really care, both because these examples are just to demonstrate a hooking concept, and because these "leaked" allocs need to exist until program termination anyway. 
+
 ## Terminology
 While there doesn't appear to be much in the way of standard terminology for function hooking techniques, the code (and readmes) in this repository use the following terms:
 * Target Function: The function being hooked

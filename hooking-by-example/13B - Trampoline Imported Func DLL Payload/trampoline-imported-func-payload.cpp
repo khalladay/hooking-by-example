@@ -216,6 +216,7 @@ BOOL WINAPI DllMain(HINSTANCE hinstDLL, DWORD ul_reason_for_call, LPVOID lpvRese
 {
 	if (ul_reason_for_call == DLL_PROCESS_ATTACH)
 	{
+		printf("Function Payload Injected Successfully \n");
 		HMODULE mod = FindModuleInProcess(GetCurrentProcess(), TARGET_DLL_NAME);
 
 		void* localHookFunc = GetProcAddress(mod, FUNC2HOOK_NAME);

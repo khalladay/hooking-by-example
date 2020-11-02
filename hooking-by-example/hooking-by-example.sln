@@ -6,6 +6,7 @@ MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "_SharedCode", "_SharedCode", "{5AEAB45E-C6A2-401F-805F-EE1333C09185}"
 	ProjectSection(SolutionItems) = preProject
 		hooking_common.h = hooking_common.h
+		trampoline_common.h = trampoline_common.h
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "01 - Hook Free Function (x86)", "01 - Hook Free Function (x86)\01 - Hook Free Function (x86).vcxproj", "{445C1A92-51B6-4279-8351-DA36CBA9FEB4}"
@@ -21,8 +22,6 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "A - Target With Free Functions", "A - Target With Free Functions\A - Target With Free Functions.vcxproj", "{70A67C4A-C130-4E3F-89BE-6D37D513B6A4}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "B - Target With Free Function From DLL", "B - Target With Free Function From DLL\B - Target With Free Function From DLL.vcxproj", "{2787AB31-3560-4C48-998F-7B268277C0C0}"
-EndProject
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "B2 - GetNum-DLL", "B2 - GetNum-DL\B2 - GetNum-DL.vcxproj", "{84BBE455-5095-4F66-BFF8-75B701E375FB}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "C - Target With Non-Virtual Member Functions", "C - Target With Non-Virtual Member Functions\C - Target With Non-Virtual Member Functions.vcxproj", "{9876D9CF-1993-4A2F-9FD3-CCFEB3278689}"
 EndProject
@@ -51,6 +50,14 @@ EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "14 - Trampoline Hook MSPaint", "14 - Trampoline Hook MSPaint\14 - Trampoline Hook MSPaint.vcxproj", "{2E4CA377-202F-4AE3-B490-05F9166B5D2F}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "14B - Trampoline Hook MSPaint Payload", "14B - Trampoline Hook MSPaint Payload\14B - Trampoline Hook MSPaint Payload.vcxproj", "{BD2FE2EC-67BA-42DA-8731-780E5C999270}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HookMSPaintCreateProcess-DLL", "HookMSPaintCreateProcess-DLL\HookMSPaintCreateProcess-DLL.vcxproj", "{D81E40F9-A17E-48AD-86E9-98BCD024908F}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "HookMSPaintCreateProcess", "HookMSPaintCreateProcess\HookMSPaintCreateProcess.vcxproj", "{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TrampolineForBlogPost", "TrampolineForBlogPost\TrampolineForBlogPost.vcxproj", "{98980936-5FD4-4D60-B7C9-1962B72CFE3C}"
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "B2 - GetNum-DLL", "B2 - GetNum-DLL\B2 - GetNum-DL.vcxproj", "{84BBE455-5095-4F66-BFF8-75B701E375FB}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -116,14 +123,6 @@ Global
 		{2787AB31-3560-4C48-998F-7B268277C0C0}.Release|x64.Build.0 = Release|x64
 		{2787AB31-3560-4C48-998F-7B268277C0C0}.Release|x86.ActiveCfg = Release|Win32
 		{2787AB31-3560-4C48-998F-7B268277C0C0}.Release|x86.Build.0 = Release|Win32
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x64.ActiveCfg = Debug|x64
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x64.Build.0 = Debug|x64
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x86.ActiveCfg = Debug|Win32
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x86.Build.0 = Debug|Win32
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x64.ActiveCfg = Release|x64
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x64.Build.0 = Release|x64
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x86.ActiveCfg = Release|Win32
-		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x86.Build.0 = Release|Win32
 		{9876D9CF-1993-4A2F-9FD3-CCFEB3278689}.Debug|x64.ActiveCfg = Debug|x64
 		{9876D9CF-1993-4A2F-9FD3-CCFEB3278689}.Debug|x64.Build.0 = Debug|x64
 		{9876D9CF-1993-4A2F-9FD3-CCFEB3278689}.Debug|x86.ActiveCfg = Debug|Win32
@@ -236,6 +235,38 @@ Global
 		{BD2FE2EC-67BA-42DA-8731-780E5C999270}.Release|x64.Build.0 = Release|x64
 		{BD2FE2EC-67BA-42DA-8731-780E5C999270}.Release|x86.ActiveCfg = Release|Win32
 		{BD2FE2EC-67BA-42DA-8731-780E5C999270}.Release|x86.Build.0 = Release|Win32
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Debug|x64.ActiveCfg = Debug|x64
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Debug|x64.Build.0 = Debug|x64
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Debug|x86.ActiveCfg = Debug|Win32
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Debug|x86.Build.0 = Debug|Win32
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Release|x64.ActiveCfg = Release|x64
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Release|x64.Build.0 = Release|x64
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Release|x86.ActiveCfg = Release|Win32
+		{D81E40F9-A17E-48AD-86E9-98BCD024908F}.Release|x86.Build.0 = Release|Win32
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Debug|x64.ActiveCfg = Debug|x64
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Debug|x64.Build.0 = Debug|x64
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Debug|x86.ActiveCfg = Debug|Win32
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Debug|x86.Build.0 = Debug|Win32
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Release|x64.ActiveCfg = Release|x64
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Release|x64.Build.0 = Release|x64
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Release|x86.ActiveCfg = Release|Win32
+		{72788AD1-49F1-4FCC-A6A9-CC7D222B8F10}.Release|x86.Build.0 = Release|Win32
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Debug|x64.ActiveCfg = Debug|x64
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Debug|x64.Build.0 = Debug|x64
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Debug|x86.ActiveCfg = Debug|Win32
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Debug|x86.Build.0 = Debug|Win32
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Release|x64.ActiveCfg = Release|x64
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Release|x64.Build.0 = Release|x64
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Release|x86.ActiveCfg = Release|Win32
+		{98980936-5FD4-4D60-B7C9-1962B72CFE3C}.Release|x86.Build.0 = Release|Win32
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x64.ActiveCfg = Debug|x64
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x64.Build.0 = Debug|x64
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x86.ActiveCfg = Debug|Win32
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Debug|x86.Build.0 = Debug|Win32
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x64.ActiveCfg = Release|x64
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x64.Build.0 = Release|x64
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x86.ActiveCfg = Release|Win32
+		{84BBE455-5095-4F66-BFF8-75B701E375FB}.Release|x86.Build.0 = Release|Win32
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -1,3 +1,4 @@
+#pragma once 
 #include <Windows.h>
 #include <memoryapi.h>
 #include <wow64apiset.h> // for checking is process is 64 bit
@@ -379,6 +380,7 @@ uint32_t WriteSaveArgumentRegisters(uint8_t* dst)
 
 uint32_t WriteRestoreArgumentRegisters(uint8_t* dst)
 {
+
 	uint8_t asmBytes[] =
 	{
 		0x0F, 0x10, 0x04, 0x24, //movups xmm0,xmmword ptr[rsp]

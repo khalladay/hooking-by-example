@@ -170,7 +170,7 @@ void InstallHook(void* targetFunc, void* payloadFunc)
 	HookDesc hook = { 0 };
 	hook.originalFunc = targetFunc;
 	hook.payloadFunc = payloadFunc;
-	hook.trampolineMem = AllocPage();
+	hook.trampolineMem = AllocatePageNearAddress(targetFunc);
 	hook.longJumpMem = AllocatePageNearAddress(targetFunc);
 
 
@@ -205,10 +205,10 @@ void InstallHook(void* targetFunc, void* payloadFunc)
  * PAYLOAD CODE           *
  **************************/
 
-thread_local Gdiplus::GpStatus(*GdipSetSolidFillColorPointer)(Gdiplus::GpSolidFill* brush, Gdiplus::ARGB color);
+Gdiplus::GpStatus(*GdipSetSolidFillColorPointer)(Gdiplus::GpSolidFill* brush, Gdiplus::ARGB color);
 Gdiplus::GpStatus GdipSetSolidFillColorPayload(Gdiplus::GpSolidFill* brush, Gdiplus::ARGB color)
 {
-	Gdiplus::ARGB red = 0xffff << RED_SHIFT;
+	Gdiplus::ARGB red = 0xffff7700;
 	PopAddress(uint64_t(&GdipSetSolidFillColorPointer));
 	return GdipSetSolidFillColorPointer(brush, red);
 }
