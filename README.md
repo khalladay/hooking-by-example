@@ -68,7 +68,7 @@ Basically the same as the above, except this example includes code to pause all 
 ### [12 - Multiple Trampolines, Multiple Hooks](https://github.com/khalladay/hooking-by-example/tree/master/hooking-by-example/12%20-%20Multiple%20Trampolines%2C%20Multiple%20Hooks)
 This expands on the hooking/trampoline code used in the previous two examples to support having multiple functions redirect to the same payload, and to allow payload functions to call other functions with hooks installed in them. 
 
-### [13 = Trampoline Imported Func With DLL Injection](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/13%20-%20Trampoline%20Imported%20Func%20With%20DLL%20Injection/trampoline-remote-process-with-dll-injection.cpp)
+### [13 - Trampoline Imported Func With DLL Injection](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/13%20-%20Trampoline%20Imported%20Func%20With%20DLL%20Injection/trampoline-remote-process-with-dll-injection.cpp)
 This is the first trampoline example that installs a hook in a different process (in this case, the target app [B - Target with Free Functions From DLL]()). All the hooking logic is contained in a dll payload [13B - Trampoline Imported Func DLL Payload](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/13B%20-%20Trampoline%20Imported%20Func%20DLL%20Payload/trampoline-imported-func-payload.cpp). There's not much new here, this example just combines the trampoline hooking stuff already done with the previously shown techniques for hooking a function imported from a dll. 
 
 ### [14 - Trampoline Hook MSPaint](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/14%20-%20Trampoline%20Hook%20MSPaint/trampoline-hook-mspaint.cpp)
@@ -89,16 +89,17 @@ Target application that calls a non virtual member function in a loop.
 Target application that calls a virtual member function in a loop. 
 
 # References
-https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=vs-2019
-http://jbremer.org/x86-api-hooking-demystified/#ah-introduction
-https://guidedhacking.com/threads/code-detouring-hooking-guide.14185/
-https://easyhook.github.io/tutorials/nativeremotehook.html
-http://sandsprite.com/blogs/index.php?uid=7&pid=232&year=2012
-https://www.ragestorm.net/blogs/?p=107
-https://devblogs.microsoft.com/oldnewthing/20170120-00/?p=95225 
-https://security.stackexchange.com/questions/18556/how-do-aslr-and-dep-work
-https://www.blackhat.com/docs/us-16/materials/us-16-Yavo-Captain-Hook-Pirating-AVs-To-Bypass-Exploit-Mitigations.pdf
-https://www.malwaretech.com/2015/01/inline-hooking-for-programmers-part-1.html
-https://nagareshwar.securityxploded.com/2014/03/20/code-injection-and-api-hooking-techniques/
-https://blog.nettitude.com/uk/windows-inline-function-hooking
-https://www.fireeye.com/blog/threat-research/2020/03/six-facts-about-address-space-layout-randomization-on-windows.html
+
+* https://docs.microsoft.com/en-us/cpp/build/x64-calling-convention?view=vs-2019
+* http://jbremer.org/x86-api-hooking-demystified/#ah-introduction
+* https://guidedhacking.com/threads/code-detouring-hooking-guide.14185/
+* https://easyhook.github.io/tutorials/nativeremotehook.html
+* http://sandsprite.com/blogs/index.php?uid=7&pid=232&year=2012
+* https://www.ragestorm.net/blogs/?p=107
+* https://devblogs.microsoft.com/oldnewthing/20170120-00/?p=95225 
+* https://security.stackexchange.com/questions/18556/how-do-aslr-and-dep-work
+* https://www.blackhat.com/docs/us-16/materials/us-16-Yavo-Captain-Hook-Pirating-AVs-To-Bypass-Exploit-Mitigations.pdf
+* https://www.malwaretech.com/2015/01/inline-hooking-for-programmers-part-1.html
+* https://nagareshwar.securityxploded.com/2014/03/20/code-injection-and-api-hooking-techniques/
+* https://blog.nettitude.com/uk/windows-inline-function-hooking
+* https://www.fireeye.com/blog/threat-research/2020/03/six-facts-about-address-space-layout-randomization-on-windows.html
