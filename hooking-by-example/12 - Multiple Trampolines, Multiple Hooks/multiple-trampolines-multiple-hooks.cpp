@@ -100,12 +100,13 @@ void InstallHook(void* func2hook, void* payloadFunc)
 
 	DWORD oldProtect;
 	VirtualProtect(func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
+	void* hookMemory = AllocatePageNearAddress(func2hook);
 
-	//create the trampoline
-	uint8_t* trampolineMem = (uint8_t*)AllocatePageNearAddress(func2hook); 
-	uint32_t trampolineSize = BuildTrampoline(func2hook, (void*)(trampolineMem+102));
+	//102 is the size of the "pre-payload" instructions that are written below
+	//the trampoline will be located after these instructions in memory
+	uint32_t trampolineSize = BuildTrampoline(func2hook, (void*)((char*)hookMemory+102));
 
-	uint8_t* memoryIter = (uint8_t*)trampolineMem;
+	uint8_t* memoryIter = (uint8_t*)hookMemory;
 	uint64_t trampolineAddress = (uint64_t)(memoryIter)+102;
 
 	memoryIter += WriteSaveArgumentRegisters(memoryIter);
@@ -117,8 +118,8 @@ void InstallHook(void* func2hook, void* payloadFunc)
 	memoryIter += WriteAbsoluteJump64(memoryIter, payloadFunc);
 
 	//create the relay function
-	void* relayFuncMemory = AllocatePageNearAddress(func2hook);
-	WriteAbsoluteJump64(relayFuncMemory, trampolineMem); //write relay func instructions
+	void* relayFuncMemory = memoryIter + trampolineSize;
+	WriteAbsoluteJump64(relayFuncMemory, hookMemory); //write relay func instructions
 
 	//install the hook
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
@@ -127,7 +128,6 @@ void InstallHook(void* func2hook, void* payloadFunc)
 	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
 
 	SetOtherThreadsSuspended(false);
-
 }
 
 //almost certainly specific to MSVC, lets you get a void*

@@ -75,18 +75,16 @@ void InstallHook(void* func2hook, void* payloadFunc, void** trampolinePtr)
 
 	DWORD oldProtect;
 	VirtualProtect(func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
+	void* hookMemory = AllocatePageNearAddress(func2hook);
 
 	//create the trampoline
-	uint8_t trampolineBytes[1024];
-	uint32_t trampolineSize = BuildTrampoline(func2hook, trampolineBytes);
+	uint32_t trampolineSize = BuildTrampoline(func2hook, hookMemory);
 
 	//Allocate executable memory for the trampoline
-	void* trampolineMem = VirtualAlloc(NULL, trampolineSize, MEM_COMMIT | MEM_RESERVE, PAGE_EXECUTE_READWRITE);
-	memcpy(trampolineMem, trampolineBytes, trampolineSize);
-	*trampolinePtr = trampolineMem;
+	*trampolinePtr = hookMemory;
 
 	//create the relay function
-	void* relayFuncMemory = AllocatePageNearAddress(func2hook);
+	void* relayFuncMemory = (char*)hookMemory + trampolineSize;
 	WriteAbsoluteJump64(relayFuncMemory, payloadFunc); //write relay func instructions
 
 	//install the hook
