@@ -143,7 +143,8 @@ void RewriteStolenJumpInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* ab
 //NOPs, before writing a 2 byte jump to the start
 void RewriteStolenCallInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* absTableEntry)
 {
-	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size);
+	uint32_t numNOPs = instr->size - 2;
+	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size - numNOPs);
 
 	//calls need to be rewritten as relative jumps to the abs table
 	//but we want to preserve the length of the instruction, so pad with NOPs
@@ -177,7 +178,7 @@ uint32_t AddCallToAbsTable(cs_insn& call, uint8_t* absTableMem, uint8_t* jumpBac
 
 	//after the call, we need to add a second 2 byte jump, which will jump back to the 
 		//final jump of the stolen bytes
-	uint8_t jmpBytes[2] = { 0xEB, uint8_t( jumpBackToHookedFunc - (absTableMem + sizeof(jmpBytes))) };
+	uint8_t jmpBytes[2] = { 0xEB, uint8_t(jumpBackToHookedFunc - (dstMem + sizeof(jmpBytes))) };
 	memcpy(dstMem, jmpBytes, sizeof(jmpBytes));
 
 	return sizeof(callAsmBytes) + sizeof(jmpBytes); //15

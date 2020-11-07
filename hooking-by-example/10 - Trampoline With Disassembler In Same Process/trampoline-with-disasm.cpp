@@ -170,7 +170,8 @@ void _RewriteStolenJumpInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* a
 //NOPs, before writing a 2 byte jump to the start
 void _RewriteStolenCallInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* absTableEntry)
 {
-	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size);
+	uint32_t numNOPs = instr->size - 2;
+	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size - numNOPs);
 
 	//calls need to be rewritten as relative jumps to the abs table
 	//but we want to preserve the length of the instruction, so pad with NOPs
@@ -223,7 +224,7 @@ uint32_t _AddCallToAbsTable(cs_insn& call, uint8_t* absTableMem, uint8_t* jumpBa
 
 	//after the call, we need to add a second 2 byte jump, which will jump back to the 
 		//final jump of the stolen bytes
-	uint8_t jmpBytes[2] = { 0xEB, jumpBackToHookedFunc - (absTableMem + sizeof(jmpBytes)) };
+	uint8_t jmpBytes[2] = { 0xEB, uint8_t(jumpBackToHookedFunc - (dstMem + sizeof(jmpBytes))) };
 	memcpy(dstMem, jmpBytes, sizeof(jmpBytes));
 
 	return sizeof(callAsmBytes) + sizeof(jmpBytes); //15
@@ -294,6 +295,8 @@ void InstallHook(void* func2hook, void* payloadFunc, void** trampolinePtr)
 	DWORD oldProtect;
 	VirtualProtect(func2hook, 1024, PAGE_EXECUTE_READWRITE, &oldProtect);
 
+	//it makes life way easier when relocating rip-relative operands 
+	//if trampolines are located close to the function being hooked
 	void* hookMemory = AllocatePageNearAddress(func2hook);
 	uint32_t trampolineSize = _BuildTrampoline(func2hook, hookMemory);
 	*trampolinePtr = hookMemory;
