@@ -123,21 +123,21 @@ void _RelocateInstruction(cs_insn* inst, void* dstLocation)
 		case 1:
 		{
 			int8_t disp = _GetDisplacement<uint8_t>(inst, offset);
-			disp -= uint64_t(dstLocation) - inst->address;
+			disp -= int8_t(uint64_t(dstLocation) - inst->address);
 			memcpy(&inst->bytes[offset], &disp, 1);
 		}break;
 
 		case 2:
 		{
 			int16_t disp = _GetDisplacement<uint16_t>(inst, offset);
-			disp -= uint64_t(dstLocation) - inst->address;
+			disp -= int16_t(uint64_t(dstLocation) - inst->address);
 			memcpy(&inst->bytes[offset], &disp, 2);
 		}break;
 
 		case 4:
 		{
 			int32_t disp = _GetDisplacement<int32_t>(inst, offset);
-			disp -= (int32_t(dstLocation) - inst->address);
+			disp -= int32_t(uint64_t(dstLocation) - inst->address);
 			memcpy(&inst->bytes[offset], &disp, 4);
 		}break;
 	}
@@ -149,7 +149,7 @@ void _RelocateInstruction(cs_insn* inst, void* dstLocation)
 //jump logic, this func rewrites the instruction's operand bytes only. 
 void _RewriteStolenJumpInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* absTableEntry)
 {
-	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size);
+	uint8_t distToJumpTable = uint8_t(absTableEntry - (instrPtr + instr->size));
 
 	//jmp instructions can have a 1 or 2 byte opcode, and need a 1-4 byte operand
 	//rewrite the operand for the jump to go to the jump table
@@ -171,7 +171,7 @@ void _RewriteStolenJumpInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* a
 void _RewriteStolenCallInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* absTableEntry)
 {
 	uint32_t numNOPs = instr->size - 2;
-	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size - numNOPs);
+	uint8_t distToJumpTable = uint8_t(absTableEntry - (instrPtr + instr->size - numNOPs));
 
 	//calls need to be rewritten as relative jumps to the abs table
 	//but we want to preserve the length of the instruction, so pad with NOPs
@@ -254,7 +254,7 @@ uint32_t _BuildTrampoline(void* func2hook, void* dstMemForTrampoline)
 	uint8_t* jumpBackMem = stolenByteMem + stolenInstrs.numBytes;
 	uint8_t* absTableMem = jumpBackMem + 13; //13 is the size of a 64 bit mov/jmp instruction pair
 
-	for (int i = 0; i < stolenInstrs.numInstructions; ++i)
+	for (uint32_t i = 0; i < stolenInstrs.numInstructions; ++i)
 	{
 		cs_insn& inst = stolenInstrs.instructions[i];
 		if (inst.id >= X86_INS_LOOP && inst.id <= X86_INS_LOOPNE)
@@ -287,7 +287,7 @@ uint32_t _BuildTrampoline(void* func2hook, void* dstMemForTrampoline)
 	WriteAbsoluteJump64(jumpBackMem, (uint8_t*)func2hook + 5);
 	free(stolenInstrs.instructions);
 
-	return absTableMem - dstMemForTrampoline;
+	return uint32_t(absTableMem - (uint8_t*)dstMemForTrampoline);
 }
 
 void InstallHook(void* func2hook, void* payloadFunc, void** trampolinePtr)
@@ -307,14 +307,14 @@ void InstallHook(void* func2hook, void* payloadFunc, void** trampolinePtr)
 	
 	//install the hook
 	uint8_t jmpInstruction[5] = { 0xE9, 0x0, 0x0, 0x0, 0x0 };
-	const int32_t relAddr = (int32_t)relayFuncMemory - ((int32_t)func2hook + sizeof(jmpInstruction));
+	const int32_t relAddr = int32_t((uint64_t)relayFuncMemory - ((uint64_t)func2hook + sizeof(jmpInstruction)));
 	memcpy(jmpInstruction + 1, &relAddr, 4);
 	memcpy(func2hook, jmpInstruction, sizeof(jmpInstruction));
 }
 
 int main(int argc, const char** argv)
 {
-	CallTargetFunc(5, argc);
+	CallTargetFunc(5, (float)argc);
 	InstallHook(CallTargetFunc, HookPayload, (void**)&CallTargetFuncTrampoline);
 	CallTargetFunc(7, (float)argc);
 }

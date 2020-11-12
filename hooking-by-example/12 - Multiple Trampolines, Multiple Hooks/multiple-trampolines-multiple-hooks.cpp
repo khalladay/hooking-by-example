@@ -139,7 +139,6 @@ inline void* GetFuncPointer(FuncSig func)
 	return (void*)(*ptrptr);
 }
 
-#pragma optimize(off, "")
 int main()
 {
 	Dog snoopy("snoopy");

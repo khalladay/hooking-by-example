@@ -93,26 +93,26 @@ void RelocateInstruction(cs_insn* inst, void* dstLocation)
 	uint64_t displacement = inst->bytes[x86->encoding.disp_offset];
 	switch (x86->encoding.disp_size)
 	{
-		case 1: 
-		{
-			int8_t disp = GetDisplacement<uint8_t>(inst, offset);
-			disp -= uint64_t(dstLocation) - inst->address;
-			memcpy(&inst->bytes[offset], &disp, 1);
-		}break;
+	case 1:
+	{
+		int8_t disp = GetDisplacement<uint8_t>(inst, offset);
+		disp -= int8_t(uint64_t(dstLocation) - inst->address);
+		memcpy(&inst->bytes[offset], &disp, 1);
+	}break;
 
-		case 2: 
-		{
-			int16_t disp = GetDisplacement<uint16_t>(inst, offset);
-			disp -= uint64_t(dstLocation) - inst->address;
-			memcpy(&inst->bytes[offset], &disp, 2);
-		}break;
+	case 2:
+	{
+		int16_t disp = GetDisplacement<uint16_t>(inst, offset);
+		disp -= int16_t(uint64_t(dstLocation) - inst->address);
+		memcpy(&inst->bytes[offset], &disp, 2);
+	}break;
 
-		case 4:
-		{
-			int32_t disp = GetDisplacement<int32_t>(inst, offset);
-			disp -= (int32_t(dstLocation) - inst->address);
-			memcpy(&inst->bytes[offset], &disp, 4);
-		}break;
+	case 4:
+	{
+		int32_t disp = GetDisplacement<int32_t>(inst, offset);
+		disp -= int32_t(uint64_t(dstLocation) - inst->address);
+		memcpy(&inst->bytes[offset], &disp, 4);
+	}break;
 	}
 }
 
@@ -144,7 +144,7 @@ void RewriteStolenJumpInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* ab
 void RewriteStolenCallInstruction(cs_insn* instr, uint8_t* instrPtr, uint8_t* absTableEntry)
 {
 	uint32_t numNOPs = instr->size - 2;
-	uint8_t distToJumpTable = absTableEntry - (instrPtr + instr->size - numNOPs);
+	uint8_t distToJumpTable = uint8_t(absTableEntry - (instrPtr + instr->size - numNOPs));
 
 	//calls need to be rewritten as relative jumps to the abs table
 	//but we want to preserve the length of the instruction, so pad with NOPs
@@ -202,7 +202,6 @@ table. The relative instruction in the stolen instructions section get rewritten
 jumps to the corresponding instructions in the absolute instruction table.
 */
 
-#pragma optimize("",off)
 uint32_t BuildTrampoline(void* func2hook, void* dstMemForTrampoline)
 {
 	X64Instructions stolenInstrs = StealBytes(func2hook);
@@ -243,7 +242,6 @@ uint32_t BuildTrampoline(void* func2hook, void* dstMemForTrampoline)
 	WriteAbsoluteJump64(jumpBackMem, (uint8_t*)func2hook + 5);
 	free(stolenInstrs.instructions);
 
-	return uint32_t( (uint8_t*)absTableMem - dstMemForTrampoline);
+	return uint32_t( (uint8_t*)absTableMem - (uint8_t*)dstMemForTrampoline);
 }
-#pragma optimize ("", on)
 

@@ -103,3 +103,9 @@ Target application that calls a virtual member function in a loop.
 * https://nagareshwar.securityxploded.com/2014/03/20/code-injection-and-api-hooking-techniques/
 * https://blog.nettitude.com/uk/windows-inline-function-hooking
 * https://www.fireeye.com/blog/threat-research/2020/03/six-facts-about-address-space-layout-randomization-on-windows.html
+* http://www.nynaeve.net/?p=192
+* https://medium.com/@_sl4v/hooking-is-easy-right-right-fb00de2f2372
+* https://github.com/stevemk14ebr/PolyHook
+* https://github.com/microsoft/Detours
+* https://github.com/TsudaKageyu/minhook
+* https://easyhook.github.io/
