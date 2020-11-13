@@ -106,7 +106,7 @@ void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
 		uint64_t highAddr = startPage + byteOffset;
 		uint64_t lowAddr = startPage - byteOffset;
 
-		bool needsExit = highAddr > maxAddr || lowAddr < minAddr;
+		bool needsExit = highAddr > maxAddr && lowAddr < minAddr;
 
 		if (highAddr < maxAddr)
 		{
@@ -136,14 +136,6 @@ void* AllocatePageNearAddressRemote(HANDLE handle, void* targetAddr)
 void* AllocatePageNearAddress(void* targetAddr)
 {
 	return AllocatePageNearAddressRemote(GetCurrentProcess(), targetAddr);
-}
-
-void LowercaseInPlace(char* str)
-{
-	for (int i = 0; str[i]; i++)
-	{
-		str[i] = tolower(str[i]);
-	}
 }
 
 //I use subst to alias my development folder to W: 
@@ -182,7 +174,7 @@ void RebaseVirtualDrivePath(const char* path, char* outBuff, size_t outBuffSize)
 HMODULE FindModuleInProcess(HANDLE process, const char* name)
 {
 	char* lowerCaseName = _strdup(name);
-	LowercaseInPlace(lowerCaseName);
+	_strlwr_s(lowerCaseName, strlen(name) + 1);
 
 	HMODULE remoteProcessModules[1024];
 	DWORD numBytesWrittenInModuleArray = 0;
@@ -197,7 +189,7 @@ HMODULE FindModuleInProcess(HANDLE process, const char* name)
 	DWORD numRemoteModules = numBytesWrittenInModuleArray / sizeof(HMODULE);
 	CHAR remoteProcessName[256];
 	GetModuleFileNameEx(process, NULL, remoteProcessName, 256); //a null module handle gets the process name
-	LowercaseInPlace(remoteProcessName);
+	_strlwr_s(remoteProcessName, 256);
 
 	MODULEINFO remoteProcessModuleInfo;
 	HMODULE remoteProcessModule = 0; //An HMODULE is just the DLL's base address 
@@ -208,11 +200,11 @@ HMODULE FindModuleInProcess(HANDLE process, const char* name)
 		CHAR absoluteModuleName[256];
 		CHAR rebasedPath[256] = { 0 };
 		GetModuleFileNameEx(process, remoteProcessModules[i], moduleName, 256);
+		_strlwr_s(moduleName, 256);
 		char* lastSlash = strrchr(moduleName, '\\');
 		if (!lastSlash) lastSlash = strrchr(moduleName, '/');
 
 		char* dllName = lastSlash + 1;
-		LowercaseInPlace(dllName);
 
 		if (strcmp(dllName, lowerCaseName) == 0)
 		{
@@ -280,7 +272,7 @@ HMODULE GetBaseModuleForProcess(HANDLE process)
 	DWORD numRemoteModules = numBytesWrittenInModuleArray / sizeof(HMODULE);
 	CHAR remoteProcessName[256];
 	GetModuleFileNameEx(process, NULL, remoteProcessName, 256); //a null module handle gets the process name
-	LowercaseInPlace(remoteProcessName);
+	_strlwr_s(remoteProcessName, 256);
 
 	MODULEINFO remoteProcessModuleInfo;
 	HMODULE remoteProcessModule = 0; //An HMODULE is just the DLL's base address 
@@ -299,7 +291,7 @@ HMODULE GetBaseModuleForProcess(HANDLE process)
 		check(err);
 
 		RebaseVirtualDrivePath(absoluteModuleName, rebasedPath, 256);
-		LowercaseInPlace(rebasedPath);
+		_strlwr_s(rebasedPath, 256);
 
 		if (strcmp(remoteProcessName, rebasedPath) == 0)
 		{

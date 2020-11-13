@@ -49,7 +49,7 @@ void* _AllocatePageNearAddress(void* targetAddr)
 		uint64_t highAddr = startPage + byteOffset;
 		uint64_t lowAddr = startPage - byteOffset;
 
-		bool needsExit = highAddr > maxAddr || lowAddr < minAddr;
+		bool needsExit = highAddr > maxAddr && lowAddr < minAddr;
 
 		if (highAddr < maxAddr)
 		{
