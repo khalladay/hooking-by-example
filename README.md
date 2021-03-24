@@ -53,7 +53,7 @@ This example shows how to install a hook in a function that is not imported by a
 ### [08 - Hook Other Process By RVA with DLL Payload](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/08%20-%20Hook%20Other%20Process%20By%20RVA%20with%20DLL%20Payload/hook-by-rva-with-dll-payload.cpp)
 Similar to the above, except this example uses dll injection to install the payload function rather than writing raw machine code bytes. This is much easier to work with, since your payloads can be written in C++ again. The payload for this example is contained in the project [08B-DLL-Payload](https://github.com/khalladay/hooking-by-example/tree/master/hooking-by-example/08B-DLL-Payload). 
 
-## <a name="Non-Trampoline Examples"></a> Non-Trampoline Examples
+## <a name="Trampoline Examples"></a> Trampoline Examples
 The following examples install trampolines when hooking, meaning that the program can still execute the logic in the target function after a hook has been installed. Since installing a hook overwrites at least the first 5 bytes in the target function, the instructions contained in these 5 bytes are moved to the trampoline function. Thus, calling the trampoline function effectively executes the original logic of the target function. 
 
 ### [09 - Trampoline Free Function In Same Process](https://github.com/khalladay/hooking-by-example/blob/master/hooking-by-example/09%20-%20Trampoline%20Free%20Function%20In%20Same%20Process/trampoline-free-function.cpp)
